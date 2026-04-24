@@ -47,6 +47,10 @@ export async function POST(request: NextRequest) {
       playerCount
     )
 
+    if (!Array.isArray(generatedRounds) || generatedRounds.length === 0) {
+      throw new Error(`OpenAI returned invalid rounds: ${JSON.stringify(generatedRounds)}`)
+    }
+
     // Save rounds to database
     const roundsToInsert = generatedRounds.map((round, index) => {
       const sidequestPlayerId = round.hasSidequest && round.sidequest
@@ -56,14 +60,14 @@ export async function POST(request: NextRequest) {
       return {
         room_id: room.id,
         round_number: index + 1,
-        main_question_nl: round.mainQuestion.nl,
-        main_question_en: round.mainQuestion.en,
-        has_sidequest: round.hasSidequest,
+        main_question_nl: round.mainQuestion?.nl ?? 'Vraag',
+        main_question_en: round.mainQuestion?.en ?? 'Question',
+        has_sidequest: round.hasSidequest ?? false,
         sidequest_player_id: sidequestPlayerId,
-        sidequest_nl: round.sidequest?.text.nl ?? null,
-        sidequest_en: round.sidequest?.text.en ?? null,
-        fake_task_nl: round.fakeTask.nl,
-        fake_task_en: round.fakeTask.en,
+        sidequest_nl: round.sidequest?.text?.nl ?? null,
+        sidequest_en: round.sidequest?.text?.en ?? null,
+        fake_task_nl: round.fakeTask?.nl ?? 'Doe niets opvallends.',
+        fake_task_en: round.fakeTask?.en ?? 'Do nothing suspicious.',
         status: index === 0 ? 'active' : 'pending',
       }
     })
@@ -82,7 +86,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, roundCount: roundsToInsert.length })
   } catch (err) {
-    console.error('Generate error:', err)
+    console.error('Generate error:', err instanceof Error ? err.message : err)
+    console.error('Generate stack:', err instanceof Error ? err.stack : 'no stack')
 
     // Reset room status on error
     try {

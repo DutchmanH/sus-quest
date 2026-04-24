@@ -2,9 +2,9 @@ import OpenAI from 'openai'
 import type { GeneratedRound, Vibe, ContentLevel } from '@/types'
 
 function getOpenAI() {
-  return new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-  })
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) throw new Error('OPENAI_API_KEY is not set')
+  return new OpenAI({ apiKey })
 }
 
 const VIBE_DESCRIPTIONS: Record<Vibe, string> = {
