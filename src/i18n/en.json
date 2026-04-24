@@ -1,0 +1,139 @@
+{
+  "home": {
+    "live": "LIVE",
+    "sus": "sus",
+    "quest": "quest",
+    "tagline": "trust no one. not your best friend. not your partner. not yourself.",
+    "start": "Start party",
+    "join": "Join with code"
+  },
+  "mode": {
+    "step": "STEP 1 / 5",
+    "title": "pick your",
+    "subtitle": "poison.",
+    "recommended": "the right choice",
+    "multiplayer": "Multiplayer",
+    "multiplayer_desc": "everyone on their own phone. sidequests, suspicions, group photos you'll regret.",
+    "single": "Single Device",
+    "single_desc": "pass one screen around. for when everyone's phone is dead (typical).",
+    "next": "Next"
+  },
+  "create": {
+    "step": "STEP 2 / 5",
+    "title": "invite the",
+    "subtitle": "suspects!!",
+    "room_code": "ROOM CODE",
+    "new_code": "new code",
+    "share": "share link",
+    "to_lobby": "To the lobby"
+  },
+  "lobby": {
+    "live": "LIVE",
+    "ready_to_lie": "ready to lie.",
+    "sus_babies": "sus babies",
+    "invite_more": "Invite more players",
+    "lets_go": "Let's gooo",
+    "ready": "READY",
+    "waiting": "WAIT",
+    "host": "HOST"
+  },
+  "settings": {
+    "step": "STEP 4 / 5",
+    "title": "how bad does",
+    "subtitle": "this get?",
+    "rounds": "rounds",
+    "vibe": "vibe",
+    "content": "content",
+    "vibe_chill": "chill",
+    "vibe_chaos": "chaos",
+    "vibe_awkward": "awkward",
+    "vibe_spicy": "spicy",
+    "vibe_comp": "comp.",
+    "content_safe": "safe",
+    "content_spicy": "spicy",
+    "content_extra": "extra spicy",
+    "generate": "Generate quest"
+  },
+  "game": {
+    "round": "ROUND",
+    "main_question": "MAIN QUESTION",
+    "psst": "psst.",
+    "sus_hint": "someone here isn't playing fair. maybe you.",
+    "at_table": "AT THE TABLE",
+    "sus_button": "sus!",
+    "card_button": "card"
+  },
+  "card": {
+    "just_for_you": "JUST FOR YOU · NO ONE'S WATCHING",
+    "mission": "MISSION",
+    "sidequest": "sidequest",
+    "succeeded": "DONE",
+    "caught": "CAUGHT",
+    "close": "close card",
+    "read_fast": "read quick, act normal. they're watching."
+  },
+  "accuse": {
+    "title": "you sure",
+    "subtitle": "about that?",
+    "wrong_note": "wrong? you drink. no pressure",
+    "chosen": "CHOSEN",
+    "call": "Call the sus!",
+    "header": "ACCUSE · PICK 1"
+  },
+  "reveal": {
+    "title": "something felt",
+    "subtitle": "off tbh...",
+    "the_sus": "THE SUS WAS",
+    "mission_done": "MISSION DONE",
+    "accusations": "ACCUSATIONS",
+    "next": "Next",
+    "correct": "BOOM",
+    "wrong": "NEIN",
+    "no_sus": "No sus this round."
+  },
+  "end": {
+    "fin": "FIN",
+    "sus_won": "the sus",
+    "has_won": "has won.",
+    "home": "home",
+    "replay": "replay"
+  },
+  "auth": {
+    "login_title": "welcome back.",
+    "login_subtitle": "log in to keep playing.",
+    "register_title": "join the quest.",
+    "register_subtitle": "create an account to host games.",
+    "email": "email address",
+    "password": "password",
+    "username": "username",
+    "login_btn": "Log in",
+    "register_btn": "Create account",
+    "no_account": "No account yet?",
+    "has_account": "Already have an account?",
+    "register_link": "Register here",
+    "login_link": "Log in",
+    "play_anon": "Play anonymous (join only)"
+  },
+  "admin": {
+    "dashboard": "Dashboard",
+    "users": "Users",
+    "total_users": "Total users",
+    "active_rooms": "Active rooms",
+    "games_played": "Games played",
+    "avg_players": "Avg. players/game",
+    "username": "Name",
+    "email": "Email",
+    "last_login": "Last login",
+    "games": "Games",
+    "admin": "Admin",
+    "susquest": "SusQuest"
+  },
+  "join": {
+    "title": "join the",
+    "subtitle": "chaos.",
+    "code_placeholder": "enter code (e.g. 7K-2M9)",
+    "name_placeholder": "your name",
+    "join_btn": "Join game",
+    "step": "STEP 3 / 5"
+  }
+}

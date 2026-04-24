@@ -1,0 +1,139 @@
+{
+  "home": {
+    "live": "LIVE",
+    "sus": "sus",
+    "quest": "quest",
+    "tagline": "trust no one. niet je beste vriend. niet je lief. niet jezelf.",
+    "start": "Start party",
+    "join": "Join met code"
+  },
+  "mode": {
+    "step": "STAP 1 / 5",
+    "title": "pick your",
+    "subtitle": "poison.",
+    "recommended": "de juiste keuze",
+    "multiplayer": "Multiplayer",
+    "multiplayer_desc": "iedereen op eigen telefoon. sidequests, verdenkingen, groepsfoto's die je niet wil zien.",
+    "single": "Single Device",
+    "single_desc": "één scherm doorgeven. voor als jullie telefoons dood zijn (typisch).",
+    "next": "Next"
+  },
+  "create": {
+    "step": "STAP 2 / 5",
+    "title": "invite the",
+    "subtitle": "suspects!!",
+    "room_code": "ROOM CODE",
+    "new_code": "nieuwe code",
+    "share": "share link",
+    "to_lobby": "Naar de lobby"
+  },
+  "lobby": {
+    "live": "LIVE",
+    "ready_to_lie": "ready to lie.",
+    "sus_babies": "sus babies",
+    "invite_more": "Nodig nog iemand uit",
+    "lets_go": "Let's gooo",
+    "ready": "READY",
+    "waiting": "WACHT",
+    "host": "HOST"
+  },
+  "settings": {
+    "step": "STAP 4 / 5",
+    "title": "hoe erg loopt",
+    "subtitle": "het uit de hand?",
+    "rounds": "rondes",
+    "vibe": "vibe",
+    "content": "content",
+    "vibe_chill": "chill",
+    "vibe_chaos": "chaos",
+    "vibe_awkward": "awkward",
+    "vibe_spicy": "spicy",
+    "vibe_comp": "comp.",
+    "content_safe": "safe",
+    "content_spicy": "spicy",
+    "content_extra": "extra spicy",
+    "generate": "Generate quest"
+  },
+  "game": {
+    "round": "RONDE",
+    "main_question": "MAIN QUESTION",
+    "psst": "psst.",
+    "sus_hint": "iemand hier speelt niet eerlijk. maybe jij.",
+    "at_table": "AT THE TABLE",
+    "sus_button": "sus!",
+    "card_button": "kaart"
+  },
+  "card": {
+    "just_for_you": "JUST FOR YOU · NIEMAND KIJKT MEE",
+    "mission": "MISSIE",
+    "sidequest": "sidequest",
+    "succeeded": "GELUKT",
+    "caught": "BETRAPT",
+    "close": "sluit kaart",
+    "read_fast": "lees ff snel, en act normal. ze loeren."
+  },
+  "accuse": {
+    "title": "you sure",
+    "subtitle": "about that?",
+    "wrong_note": "fout? jij drinkt. geen druk",
+    "chosen": "GEKOZEN",
+    "call": "Call the sus!",
+    "header": "ACCUSE · KIES 1"
+  },
+  "reveal": {
+    "title": "something felt",
+    "subtitle": "off tbh...",
+    "the_sus": "THE SUS WAS",
+    "mission_done": "MISSIE GELUKT",
+    "accusations": "BESCHULDIGINGEN",
+    "next": "Volgende",
+    "correct": "BOOM",
+    "wrong": "NEIN",
+    "no_sus": "Geen sus deze ronde."
+  },
+  "end": {
+    "fin": "FIN",
+    "sus_won": "the sus",
+    "has_won": "has won.",
+    "home": "home",
+    "replay": "replay"
+  },
+  "auth": {
+    "login_title": "welkom terug.",
+    "login_subtitle": "log in om door te spelen.",
+    "register_title": "join the quest.",
+    "register_subtitle": "maak een account aan om games te hosten.",
+    "email": "e-mailadres",
+    "password": "wachtwoord",
+    "username": "gebruikersnaam",
+    "login_btn": "Inloggen",
+    "register_btn": "Account aanmaken",
+    "no_account": "Nog geen account?",
+    "has_account": "Al een account?",
+    "register_link": "Registreer hier",
+    "login_link": "Inloggen",
+    "play_anon": "Speel anoniem (alleen joinen)"
+  },
+  "admin": {
+    "dashboard": "Dashboard",
+    "users": "Gebruikers",
+    "total_users": "Totaal gebruikers",
+    "active_rooms": "Actieve rooms",
+    "games_played": "Gespeelde games",
+    "avg_players": "Gem. spelers/game",
+    "username": "Naam",
+    "email": "E-mail",
+    "last_login": "Laatste login",
+    "games": "Games",
+    "admin": "Admin",
+    "susquest": "SusQuest"
+  },
+  "join": {
+    "title": "join the",
+    "subtitle": "chaos.",
+    "code_placeholder": "voer code in (bijv. 7K-2M9)",
+    "name_placeholder": "jouw naam",
+    "join_btn": "Join game",
+    "step": "STAP 3 / 5"
+  }
+}
