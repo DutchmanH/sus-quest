@@ -1,9 +1,11 @@
 import OpenAI from 'openai'
 import type { GeneratedRound, Vibe, ContentLevel } from '@/types'
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
+function getOpenAI() {
+  return new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  })
+}
 
 const VIBE_DESCRIPTIONS: Record<Vibe, string> = {
   chill: 'ontspannen en vriendelijk, luchtige vragen, geen directe confrontaties',
@@ -58,6 +60,7 @@ Antwoord UITSLUITEND als valid JSON array, geen uitleg, geen markdown:
 
 Bij hasSidequest: false, laat het sidequest veld weg.`
 
+  const openai = getOpenAI()
   const completion = await openai.chat.completions.create({
     model: 'gpt-4o',
     messages: [{ role: 'user', content: prompt }],
