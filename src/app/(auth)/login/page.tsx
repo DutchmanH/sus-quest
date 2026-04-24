@@ -13,20 +13,33 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [unconfirmed, setUnconfirmed] = useState(false)
 
   async function handleLogin() {
     if (!email || !password) { setError('Vul alle velden in'); return }
     setLoading(true)
     setError(null)
+    setUnconfirmed(false)
     const supabase = createClient()
     const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
     if (authError) {
-      setError('Onjuist e-mailadres of wachtwoord')
+      if (authError.message.toLowerCase().includes('email not confirmed')) {
+        setUnconfirmed(true)
+      } else {
+        setError('Onjuist e-mailadres of wachtwoord')
+      }
       setLoading(false)
       return
     }
     router.push('/')
     router.refresh()
+  }
+
+  async function resendConfirmation() {
+    const supabase = createClient()
+    await supabase.auth.resend({ type: 'signup', email })
+    setError('Bevestigingsmail opnieuw verstuurd — check je inbox.')
+    setUnconfirmed(false)
   }
 
   return (
@@ -75,6 +88,20 @@ export default function LoginPage() {
           </div>
 
           {error && <p className="text-[var(--coral)] text-sm">{error}</p>}
+          {unconfirmed && (
+            <div className="bg-[var(--bg-card)] border border-[var(--gold)] rounded-2xl px-4 py-3">
+              <p className="text-[var(--gold)] text-sm font-semibold mb-1">E-mail nog niet bevestigd</p>
+              <p className="text-[var(--text-muted)] text-xs mb-3">
+                Check je inbox voor een bevestigingsmail. Geen mail ontvangen?
+              </p>
+              <button
+                onClick={resendConfirmation}
+                className="text-xs font-mono tracking-widest text-[var(--mint)] hover:underline"
+              >
+                Stuur opnieuw →
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
