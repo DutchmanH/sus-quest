@@ -33,6 +33,7 @@ export default function CreatePage() {
       }
     }
     createRoom()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const joinUrl = roomCode

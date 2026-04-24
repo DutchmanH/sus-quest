@@ -16,7 +16,7 @@ export default function CardPage({ params }: CardPageProps) {
   const { code } = use(params)
   const router = useRouter()
   const { playerId, language } = useGameStore()
-  const { room, players, currentRound, loading } = useRoom(code)
+  const { room, currentRound, loading } = useRoom(code)
   const [cardData, setCardData] = useState<{ isSus: boolean; text: string } | null>(null)
   const [cardLoading, setCardLoading] = useState(true)
 
@@ -50,7 +50,7 @@ export default function CardPage({ params }: CardPageProps) {
     }
 
     loadCard()
-  }, [currentRound?.id, playerId, language])
+  }, [currentRound, playerId, language])
 
   if (loading || cardLoading || !cardData || !currentRound || !room) {
     return (

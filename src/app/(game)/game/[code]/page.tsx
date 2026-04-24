@@ -28,7 +28,7 @@ export default function GamePage({ params }: GamePageProps) {
     if (currentRound?.status === 'reveal') {
       router.push(`/game/${code}/reveal`)
     }
-  }, [room?.status, currentRound?.status, code, router])
+  }, [room?.status, currentRound, code, router])
 
   if (loading || !room || !currentRound) {
     return (
