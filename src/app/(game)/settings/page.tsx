@@ -48,8 +48,8 @@ export default function SettingsPage() {
       const { room, player } = await res.json()
       setPlayer(player.id, player.display_name, player.avatar_color)
       router.push(`/lobby/${room.code}`)
-    } catch {
-      setError('Room aanmaken mislukt')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Verbindingsfout — check je internet')
     } finally {
       setLoading(false)
     }
