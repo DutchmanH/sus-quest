@@ -43,7 +43,7 @@ export default function RegisterPage() {
     }
 
     // Profile is created via database trigger
-    router.push('/')
+    router.push('/dashboard')
     router.refresh()
   }
 

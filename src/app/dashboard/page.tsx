@@ -1,0 +1,186 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { MobileContainer } from '@/components/layout/MobileContainer'
+import { Button } from '@/components/ui/Button'
+import { Avatar } from '@/components/ui/Avatar'
+import { Badge } from '@/components/ui/Badge'
+import { createClient } from '@/lib/supabase/client'
+
+interface Session {
+  code: string
+  status: string
+  created_at: string
+  is_host: boolean
+  player_count: number
+}
+
+interface Profile {
+  username: string
+  avatar_color: string
+  games_played: number
+}
+
+function statusBadge(status: string) {
+  if (status === 'lobby') return <Badge variant="waiting">LOBBY</Badge>
+  if (status === 'playing' || status === 'generating') return <Badge variant="live">BEZIG</Badge>
+  return <Badge variant="default">{status.toUpperCase()}</Badge>
+}
+
+function sessionDestination(status: string, code: string) {
+  if (status === 'playing' || status === 'generating') return `/game/${code}`
+  return `/lobby/${code}`
+}
+
+export default function DashboardPage() {
+  const router = useRouter()
+  const [profile, setProfile] = useState<Profile | null>(null)
+  const [sessions, setSessions] = useState<Session[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/sessions')
+      .then(r => r.json())
+      .then(data => {
+        setProfile(data.profile ?? null)
+        setSessions(data.sessions ?? [])
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  async function handleLogout() {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/')
+    router.refresh()
+  }
+
+  if (loading) {
+    return (
+      <MobileContainer>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-[var(--mint)] border-t-transparent rounded-full animate-spin" />
+        </div>
+      </MobileContainer>
+    )
+  }
+
+  return (
+    <MobileContainer>
+      <div className="flex flex-col min-h-screen px-5 pt-5 pb-8">
+
+        {/* Top bar */}
+        <div className="flex items-center justify-between mb-8">
+          <span className="text-xs font-mono tracking-widest text-[var(--text-muted)]">
+            SUSQUEST
+          </span>
+          <button
+            onClick={handleLogout}
+            className="text-xs font-mono tracking-widest text-[var(--text-muted)] hover:text-[var(--coral)] transition-colors"
+          >
+            uitloggen →
+          </button>
+        </div>
+
+        {/* Profile header */}
+        <div className="flex items-center gap-4 mb-8">
+          <Avatar
+            name={profile?.username ?? '?'}
+            color={profile?.avatar_color ?? '#5DEDD4'}
+            size="xl"
+          />
+          <div>
+            <h1 className="text-2xl font-bold text-[var(--text-primary)] leading-tight">
+              {profile?.username ?? '—'}
+            </h1>
+            <p className="text-sm text-[var(--text-muted)] font-mono mt-0.5">
+              {profile?.games_played ?? 0} games gespeeld
+            </p>
+          </div>
+        </div>
+
+        {/* Main CTA */}
+        <div className="mb-10">
+          <div className="mb-3">
+            <h2 className="text-3xl font-bold leading-tight">
+              ready to<br />
+              <span className="italic text-[var(--coral)]">suspect?</span>
+            </h2>
+          </div>
+          <Button
+            variant="mint"
+            fullWidth
+            size="lg"
+            onClick={() => router.push('/mode')}
+          >
+            Nieuw spel starten ⚡
+          </Button>
+          <button
+            onClick={() => router.push('/join')}
+            className="w-full mt-2 py-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-muted)] text-sm font-semibold hover:text-[var(--text-primary)] transition-colors"
+          >
+            Join met code
+          </button>
+        </div>
+
+        {/* Open sessions */}
+        <div className="flex-1">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-mono tracking-widest text-[var(--text-muted)]">
+              OPEN SESSIES
+            </span>
+            {sessions.length > 0 && (
+              <span className="text-xs font-mono text-[var(--text-muted)]">
+                {sessions.length}
+              </span>
+            )}
+          </div>
+
+          {sessions.length === 0 ? (
+            <div className="bg-[var(--bg-card)] rounded-2xl px-4 py-6 text-center border border-[var(--border)]">
+              <p className="text-[var(--text-muted)] text-sm">
+                Geen actieve sessies.
+              </p>
+              <p className="text-[var(--text-muted)] text-xs mt-1 opacity-60">
+                Start een nieuw spel of join met een code.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {sessions.map(session => (
+                <button
+                  key={session.code}
+                  onClick={() => router.push(sessionDestination(session.status, session.code))}
+                  className="w-full text-left bg-[var(--bg-card)] rounded-2xl px-4 py-4 border border-[var(--border)] hover:border-[var(--mint)] transition-all group"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl font-bold font-mono text-[var(--text-primary)] tracking-widest">
+                        {session.code}
+                      </span>
+                      {statusBadge(session.status)}
+                    </div>
+                    <span className="text-[var(--text-muted)] group-hover:text-[var(--mint)] transition-colors text-lg">
+                      →
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 mt-2">
+                    <span className="text-xs text-[var(--text-muted)] font-mono">
+                      {session.player_count} speler{session.player_count !== 1 ? 's' : ''}
+                    </span>
+                    <span className="text-[var(--border)] text-xs">·</span>
+                    <span className="text-xs text-[var(--text-muted)] font-mono">
+                      {session.is_host ? 'HOST' : 'GAST'}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </MobileContainer>
+  )
+}

@@ -45,9 +45,9 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  // Redirect logged-in users away from auth pages
-  if (user && (pathname === '/login' || pathname === '/register')) {
-    return NextResponse.redirect(new URL('/', request.url))
+  // Redirect logged-in users away from auth pages and home → dashboard
+  if (user && (pathname === '/login' || pathname === '/register' || pathname === '/')) {
+    return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
   return supabaseResponse
