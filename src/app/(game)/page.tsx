@@ -14,9 +14,13 @@ export default function HomePage() {
   useEffect(() => {
     const supabase = createClient()
     supabase.auth.getUser().then(({ data: { user } }) => {
-      setIsLoggedIn(!!user)
+      if (user) {
+        router.replace('/dashboard')
+      } else {
+        setIsLoggedIn(false)
+      }
     })
-  }, [])
+  }, [router])
 
   const t = lang === 'nl' ? {
     tagline: 'trust no one. niet je beste vriend. niet je lief. niet jezelf.',
