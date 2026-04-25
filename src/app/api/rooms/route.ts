@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { generateRoomCode } from '@/lib/room-code'
 import { AVATAR_COLORS } from '@/types'
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServiceClient()
+    // Use cookie-aware client to read the user session
+    const authClient = await createClient()
+    const { data: { user } } = await authClient.auth.getUser()
 
-    // Verify user is authenticated
-    const { data: { user } } = await supabase.auth.getUser()
+    // Service client for privileged DB writes
+    const supabase = await createServiceClient()
     if (!user) {
       return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 })
     }
