@@ -28,6 +28,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="nl" className={`${spaceGrotesk.variable} h-full`}>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{const t=localStorage.getItem('susquest-theme');if(t==='light')document.documentElement.setAttribute('data-theme','light');}catch(e){}`,
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col antialiased" style={{ background: "var(--bg-primary)" }}>
         {children}
       </body>

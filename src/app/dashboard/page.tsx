@@ -76,12 +76,20 @@ export default function DashboardPage() {
           <span className="text-xs font-mono tracking-widest text-[var(--text-muted)]">
             SUSQUEST
           </span>
-          <button
-            onClick={handleLogout}
-            className="text-xs font-mono tracking-widest text-[var(--text-muted)] hover:text-[var(--coral)] transition-colors"
-          >
-            uitloggen →
-          </button>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => router.push('/account')}
+              className="text-xs font-mono tracking-widest text-[var(--text-muted)] hover:text-[var(--mint)] transition-colors"
+            >
+              ⚙ instellingen
+            </button>
+            <button
+              onClick={handleLogout}
+              className="text-xs font-mono tracking-widest text-[var(--text-muted)] hover:text-[var(--coral)] transition-colors"
+            >
+              uitloggen →
+            </button>
+          </div>
         </div>
 
         {/* Profile header */}
@@ -119,7 +127,7 @@ export default function DashboardPage() {
           </Button>
           <button
             onClick={() => router.push('/join')}
-            className="w-full mt-2 py-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-muted)] text-sm font-semibold hover:text-[var(--text-primary)] transition-colors"
+            className="w-full mt-3 py-4 rounded-3xl bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-muted)] text-base font-semibold hover:text-[var(--text-primary)] hover:border-[var(--text-muted)] transition-all"
           >
             Join met code
           </button>

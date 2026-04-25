@@ -17,6 +17,16 @@
   --live-green:    #4ADE80;
 }
 
+[data-theme="light"] {
+  --bg-primary:    #F2F8F6;
+  --bg-card:       #FFFFFF;
+  --bg-card-hover: #E8F4F1;
+  --bg-muted:      #E2F0EC;
+  --text-primary:  #0D1F1A;
+  --text-muted:    #4A7A70;
+  --border:        #C4DAD5;
+}
+
 @theme inline {
   --color-background: var(--bg-primary);
   --color-foreground: var(--text-primary);
