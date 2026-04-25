@@ -13,6 +13,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 })
     }
 
+    // Read optional settings from body
+    let rounds_total = 10, vibe = 'chaos', content_level = 'spicy'
+    try {
+      const body = await request.json()
+      if (body.rounds_total) rounds_total = body.rounds_total
+      if (body.vibe) vibe = body.vibe
+      if (body.content_level) content_level = body.content_level
+    } catch { /* no body is fine */ }
+
     // Generate unique room code
     let code = generateRoomCode()
     let attempts = 0
@@ -30,7 +39,7 @@ export async function POST(request: NextRequest) {
     // Create room
     const { data: room, error: roomError } = await supabase
       .from('rooms')
-      .insert({ code, host_id: user.id })
+      .insert({ code, host_id: user.id, rounds_total, vibe, content_level })
       .select()
       .single()
 

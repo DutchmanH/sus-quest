@@ -17,7 +17,7 @@ export default function ModePage() {
         {/* Step indicator */}
         <div className="mb-6">
           <span className="inline-block px-3 py-1 rounded-full text-xs font-mono tracking-widest border border-[var(--gold)] text-[var(--gold)]">
-            STAP 1 / 5
+            STAP 1 / 3
           </span>
         </div>
 
@@ -84,7 +84,7 @@ export default function ModePage() {
             variant="mint"
             fullWidth
             size="lg"
-            onClick={() => router.push(selected === 'multiplayer' ? '/create' : '/settings/single')}
+            onClick={() => router.push('/settings')}
           >
             Next →
           </Button>

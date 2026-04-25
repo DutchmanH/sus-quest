@@ -1,60 +1,21 @@
 'use client'
 
-import { use, useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { MobileContainer } from '@/components/layout/MobileContainer'
 import { Button } from '@/components/ui/Button'
-import { useRoom } from '@/hooks/useRoom'
 import { useGameStore } from '@/store/gameStore'
-import { createClient } from '@/lib/supabase/client'
 import type { Vibe, ContentLevel } from '@/types'
 
-interface SettingsPageProps {
-  params: Promise<{ code: string }>
-}
-
-export default function SettingsPage({ params }: SettingsPageProps) {
-  const { code } = use(params)
+export default function SettingsPage() {
   const router = useRouter()
-  const { playerId } = useGameStore()
-  const { room, players, loading } = useRoom(code)
+  const { setPlayer } = useGameStore()
 
   const [rounds, setRounds] = useState<5 | 10 | 20>(10)
   const [vibe, setVibe] = useState<Vibe>('chaos')
   const [content, setContent] = useState<ContentLevel>('spicy')
-  const [generating, setGenerating] = useState(false)
-
-  // Navigate when game starts
-  useEffect(() => {
-    if (room?.status === 'playing') {
-      router.push(`/game/${code}`)
-    }
-  }, [room?.status, code, router])
-
-  const me = players.find(p => p.id === playerId)
-  const isHost = me?.is_host ?? false
-
-  async function handleGenerate() {
-    if (!room || !isHost) return
-    setGenerating(true)
-
-    const supabase = createClient()
-    await supabase
-      .from('rooms')
-      .update({ rounds_total: rounds, vibe, content_level: content, status: 'settings' })
-      .eq('id', room.id)
-
-    const res = await fetch('/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ roomCode: code }),
-    })
-
-    if (!res.ok) {
-      setGenerating(false)
-      alert('Genereren mislukt, probeer opnieuw')
-    }
-  }
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const vibes: { value: Vibe; label: string }[] = [
     { value: 'chill', label: 'chill' },
@@ -70,23 +31,45 @@ export default function SettingsPage({ params }: SettingsPageProps) {
     { value: 'extra_spicy', label: 'extra spicy' },
   ]
 
-  if (loading) {
-    return (
-      <MobileContainer>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="w-8 h-8 border-2 border-[var(--mint)] border-t-transparent rounded-full animate-spin" />
-        </div>
-      </MobileContainer>
-    )
+  async function handleNext() {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/rooms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rounds_total: rounds, vibe, content_level: content }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        setError(data.error ?? 'Room aanmaken mislukt')
+        return
+      }
+      const { room, player } = await res.json()
+      setPlayer(player.id, player.display_name, player.avatar_color)
+      router.push(`/lobby/${room.code}`)
+    } catch {
+      setError('Room aanmaken mislukt')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
     <MobileContainer>
       <div className="flex flex-col min-h-screen px-5 pt-5">
+        {/* Back */}
+        <button
+          onClick={() => router.back()}
+          className="text-[var(--text-muted)] text-sm mb-6 self-start hover:text-[var(--text-primary)]"
+        >
+          ← terug
+        </button>
+
         {/* Step */}
         <div className="mb-6">
           <span className="inline-block px-3 py-1 rounded-full text-xs font-mono tracking-widest border border-[var(--gold)] text-[var(--gold)]">
-            STAP 4 / 5
+            STAP 2 / 3
           </span>
         </div>
 
@@ -110,8 +93,7 @@ export default function SettingsPage({ params }: SettingsPageProps) {
               {([5, 10, 20] as const).map(r => (
                 <button
                   key={r}
-                  onClick={() => isHost && setRounds(r)}
-                  disabled={!isHost}
+                  onClick={() => setRounds(r)}
                   className={`
                     flex-1 py-2 rounded-full font-semibold text-sm transition-all
                     ${rounds === r
@@ -136,8 +118,7 @@ export default function SettingsPage({ params }: SettingsPageProps) {
               {vibes.map(v => (
                 <button
                   key={v.value}
-                  onClick={() => isHost && setVibe(v.value)}
-                  disabled={!isHost}
+                  onClick={() => setVibe(v.value)}
                   className={`
                     px-4 py-2 rounded-full text-sm font-semibold transition-all
                     ${vibe === v.value
@@ -162,8 +143,7 @@ export default function SettingsPage({ params }: SettingsPageProps) {
               {contents.map(c => (
                 <button
                   key={c.value}
-                  onClick={() => isHost && setContent(c.value)}
-                  disabled={!isHost}
+                  onClick={() => setContent(c.value)}
                   className={`
                     flex-1 py-2 rounded-full text-sm font-semibold transition-all
                     ${content === c.value
@@ -178,32 +158,15 @@ export default function SettingsPage({ params }: SettingsPageProps) {
             </div>
           </div>
 
-          {!isHost && (
-            <p className="text-[var(--text-muted)] text-sm text-center mt-4">
-              Wacht op de host om te starten…
-            </p>
-          )}
+          {error && <p className="text-[var(--coral)] text-sm">{error}</p>}
         </div>
 
         {/* CTA */}
-        {isHost && (
-          <div className="py-6">
-            <Button
-              variant="coral"
-              fullWidth
-              size="lg"
-              disabled={generating}
-              onClick={handleGenerate}
-            >
-              {generating ? (
-                <>
-                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Genereren…
-                </>
-              ) : 'Generate quest ✨'}
-            </Button>
-          </div>
-        )}
+        <div className="py-6">
+          <Button variant="mint" fullWidth size="lg" disabled={loading} onClick={handleNext}>
+            {loading ? 'Room aanmaken…' : 'Nodig suspects uit →'}
+          </Button>
+        </div>
       </div>
     </MobileContainer>
   )

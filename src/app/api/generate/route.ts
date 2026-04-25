@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
     try {
       const supabase = await createServiceClient()
       const { roomCode } = await request.clone().json()
-      await supabase.from('rooms').update({ status: 'settings' }).eq('code', roomCode)
+      await supabase.from('rooms').update({ status: 'lobby' }).eq('code', roomCode)
     } catch {}
 
     return NextResponse.json({ error: 'Genereren mislukt' }, { status: 500 })
