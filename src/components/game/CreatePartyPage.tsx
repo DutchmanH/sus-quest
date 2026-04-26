@@ -7,15 +7,13 @@ import { Button } from '@/components/ui/Button'
 import { useGameStore } from '@/store/gameStore'
 import type { Setting, Groep, Boldness } from '@/types'
 
-// ── Setting ──────────────────────────────────────────────────────────────────
 const SETTINGS: { value: Setting; emoji: string; label: string; sub: string }[] = [
-  { value: 'bank',           emoji: '🛋️', label: 'Op de bank',     sub: 'thuis, ontspannen' },
-  { value: 'feest',          emoji: '🎉', label: 'Op een feest',    sub: 'muziek aan, iemand al weg' },
-  { value: 'after_midnight', emoji: '🌙', label: 'After midnight',  sub: 'remmen los, alles mag' },
-  { value: 'onderweg',       emoji: '✈️', label: 'Onderweg',        sub: 'geen props, portable' },
+  { value: 'bank',           emoji: '🛋️', label: 'Op de bank',    sub: 'thuis, ontspannen, lekker lui' },
+  { value: 'feest',          emoji: '🎉', label: 'Op een feest',   sub: 'muziek aan, iemand al weg' },
+  { value: 'after_midnight', emoji: '🌙', label: 'After midnight', sub: 'remmen los, alles mag' },
+  { value: 'onderweg',       emoji: '✈️', label: 'Onderweg',       sub: 'bus, trein of vliegtuig' },
 ]
 
-// ── Groep ─────────────────────────────────────────────────────────────────────
 const GROEPEN: { value: Groep; emoji: string; label: string; sub: string }[] = [
   { value: 'vrienden',   emoji: '🐺', label: 'Oude vrienden',    sub: 'jullie kennen elkaars geheimen' },
   { value: 'vreemden',   emoji: '🤝', label: 'Nieuwe mensen',    sub: 'icebreaker energy' },
@@ -23,62 +21,40 @@ const GROEPEN: { value: Groep; emoji: string; label: string; sub: string }[] = [
   { value: 'familie',    emoji: '😬', label: 'Familie',          sub: 'het is een familieavond…' },
 ]
 
-// ── Boldness ──────────────────────────────────────────────────────────────────
 const BOLDNESS_OPTIONS: { value: Boldness; emoji: string; label: string; sub: string; color: string }[] = [
-  {
-    value: 'gezellig',
-    emoji: '😊',
-    label: 'Gewoon gezellig',
-    sub: 'fun voor iedereen, geen slachtoffers',
-    color: 'var(--mint)',
-  },
-  {
-    value: 'blozen',
-    emoji: '🌶️',
-    label: 'Iemand gaat blozen',
-    sub: 'licht provocerend, voor volwassenen',
-    color: 'var(--gold)',
-  },
-  {
-    value: 'niemand_veilig',
-    emoji: '🔥',
-    label: 'Niemand is veilig',
-    sub: 'volledig ongecensureerd, jullie zijn gewaarschuwd',
-    color: 'var(--coral)',
-  },
+  { value: 'gezellig',       emoji: '😊', label: 'Gewoon gezellig',      sub: 'fun voor iedereen, geen slachtoffers',         color: 'var(--mint)' },
+  { value: 'blozen',         emoji: '🌶️', label: 'Iemand gaat blozen',   sub: 'licht provocerend, voor volwassenen',           color: 'var(--gold)' },
+  { value: 'niemand_veilig', emoji: '🔥', label: 'Niemand is veilig',    sub: 'volledig ongecensureerd — jullie zijn gewaarschuwd', color: 'var(--coral)' },
 ]
+
+const STEP_LABELS = ['MODE', 'LOCATIE', 'GROEP', 'INTENSITEIT', 'RONDES']
+const TOTAL_STEPS = 5
 
 export function CreatePartyPage() {
   const router = useRouter()
   const { setPlayer } = useGameStore()
-  const [step, setStep] = useState<1 | 2>(1)
+  const [step, setStep] = useState(1)
 
-  // Step 1
-  const [selected, setSelected] = useState<'multiplayer' | 'single_device'>('multiplayer')
-
-  // Step 2
-  const [rounds, setRounds] = useState<5 | 10 | 20>(10)
+  const [mode, setMode]       = useState<'multiplayer' | 'single_device'>('multiplayer')
   const [setting, setSetting] = useState<Setting>('feest')
-  const [groep, setGroep] = useState<Groep>('vrienden')
+  const [groep, setGroep]     = useState<Groep>('vrienden')
   const [boldness, setBoldness] = useState<Boldness>('blozen')
+  const [rounds, setRounds]   = useState<5 | 10 | 20>(10)
 
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError]     = useState<string | null>(null)
 
-  async function handleCreateParty() {
+  function prev() { setError(null); setStep(s => Math.max(1, s - 1)) }
+  function next() { setStep(s => Math.min(TOTAL_STEPS, s + 1)) }
+
+  async function handleCreate() {
     setLoading(true)
     setError(null)
     try {
       const res = await fetch('/api/rooms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          rounds_total: rounds,
-          vibe: setting,
-          content_level: boldness,
-          groep,
-          mode: selected,
-        }),
+        body: JSON.stringify({ rounds_total: rounds, vibe: setting, content_level: boldness, groep, mode }),
       })
       if (!res.ok) {
         const data = await res.json()
@@ -89,7 +65,7 @@ export function CreatePartyPage() {
       setPlayer(player.id, player.display_name, player.avatar_color)
       router.push(`/lobby/${room.code}/generate`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verbindingsfout — check je internet')
+      setError(err instanceof Error ? err.message : 'Verbindingsfout')
     } finally {
       setLoading(false)
     }
@@ -99,62 +75,74 @@ export function CreatePartyPage() {
     <MobileContainer>
       <div className="flex flex-col min-h-screen px-5 pt-5">
 
-        {/* Back button (step 2 only) */}
-        {step === 2 && (
-          <button
-            onClick={() => { setError(null); setStep(1) }}
-            className="text-[var(--text-muted)] text-sm mb-6 self-start hover:text-[var(--text-primary)]"
-          >
-            ← terug
-          </button>
-        )}
-
-        {/* Step badge */}
-        <div className="mb-6">
-          <span className="inline-block px-4 py-1 rounded-full text-xs font-mono font-bold tracking-widest bg-[var(--coral)] text-[var(--bg-primary)]">
-            STAP {step} / 2
+        {/* Back + progress */}
+        <div className="flex items-center gap-4 mb-6">
+          {step > 1 && (
+            <button
+              onClick={prev}
+              className="text-[var(--text-muted)] text-sm hover:text-[var(--text-primary)] transition-colors shrink-0"
+            >
+              ←
+            </button>
+          )}
+          <div className="flex gap-1.5 flex-1">
+            {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
+              <div
+                key={i}
+                className="h-1 flex-1 rounded-full transition-all duration-300"
+                style={{ background: i < step ? 'var(--mint)' : 'var(--border)' }}
+              />
+            ))}
+          </div>
+          <span className="text-[10px] font-mono tracking-widest text-[var(--text-muted)] shrink-0">
+            {step}/{TOTAL_STEPS}
           </span>
         </div>
 
-        {/* ── STEP 1: Mode ─────────────────────────────────────────────── */}
+        {/* Step label */}
+        <div className="mb-6">
+          <span className="inline-block px-3 py-1 rounded-full text-[10px] font-mono font-bold tracking-widest bg-[var(--coral)] text-[var(--bg-primary)]">
+            {STEP_LABELS[step - 1]}
+          </span>
+        </div>
+
+        {/* ── Step 1: Mode ─────────────────────────────────────────────── */}
         {step === 1 && (
           <>
             <div className="mb-8">
-              <h1 className="text-5xl font-bold leading-tight text-[var(--text-primary)]">
+              <h1 className="text-5xl font-bold leading-tight">
                 pick your<br />
                 <span className="italic text-[var(--mint)]">poison.</span>
               </h1>
             </div>
-
             <div className="flex flex-col gap-4 flex-1">
               <button
-                onClick={() => setSelected('multiplayer')}
-                className={`relative text-left p-5 rounded-3xl border transition-all duration-150 ${
-                  selected === 'multiplayer'
+                onClick={() => setMode('multiplayer')}
+                className={`relative text-left p-5 rounded-3xl border transition-all ${
+                  mode === 'multiplayer'
                     ? 'border-transparent bg-[var(--mint)]'
                     : 'border-[var(--border)] border-dashed bg-[var(--bg-card)] opacity-70'
                 }`}
               >
-                {selected === 'multiplayer' && (
+                {mode === 'multiplayer' && (
                   <div className="absolute -top-3 right-4 px-3 py-1 rounded-full text-xs font-mono font-bold tracking-widest bg-[var(--coral)] text-[var(--bg-primary)] rotate-[4deg]">
                     ✨ de juiste keuze
                   </div>
                 )}
-                <span className={`text-xs font-mono tracking-widest mb-2 block ${selected === 'multiplayer' ? 'text-[var(--bg-primary)] opacity-70' : 'text-[var(--text-muted)]'}`}>
+                <span className={`text-xs font-mono tracking-widest mb-2 block ${mode === 'multiplayer' ? 'text-[var(--bg-primary)] opacity-70' : 'text-[var(--text-muted)]'}`}>
                   MODE 01
                 </span>
-                <h2 className={`text-5xl font-bold leading-none mb-2 ${selected === 'multiplayer' ? 'text-[var(--bg-primary)]' : 'text-[var(--text-primary)]'}`}>
+                <h2 className={`text-5xl font-bold leading-none mb-2 ${mode === 'multiplayer' ? 'text-[var(--bg-primary)]' : 'text-[var(--text-primary)]'}`}>
                   Multiplayer
                 </h2>
-                <p className={`text-sm leading-relaxed max-w-[28ch] ${selected === 'multiplayer' ? 'text-[var(--bg-primary)] opacity-80' : 'text-[var(--text-muted)]'}`}>
+                <p className={`text-sm leading-relaxed max-w-[28ch] ${mode === 'multiplayer' ? 'text-[var(--bg-primary)] opacity-80' : 'text-[var(--text-muted)]'}`}>
                   iedereen op eigen telefoon. sidequests, verdenkingen, groepsfoto&apos;s die je niet wil zien.
                 </p>
               </button>
-
               <button
-                onClick={() => setSelected('single_device')}
-                className={`text-left p-5 rounded-3xl border border-dashed transition-all duration-150 ${
-                  selected === 'single_device'
+                onClick={() => setMode('single_device')}
+                className={`text-left p-5 rounded-3xl border border-dashed transition-all ${
+                  mode === 'single_device'
                     ? 'border-[var(--mint)] bg-[var(--bg-card)]'
                     : 'border-[var(--border)] bg-[var(--bg-card)] opacity-80'
                 }`}
@@ -169,155 +157,168 @@ export function CreatePartyPage() {
           </>
         )}
 
-        {/* ── STEP 2: Settings ─────────────────────────────────────────── */}
+        {/* ── Step 2: Locatie ───────────────────────────────────────────── */}
         {step === 2 && (
           <>
-            <div className="mb-7">
+            <div className="mb-8">
               <h1 className="text-4xl font-bold leading-tight">
-                stel de<br />
-                <span className="italic text-[var(--coral)]">avond in.</span>
+                waar zijn<br />
+                <span className="italic text-[var(--mint)]">jullie?</span>
               </h1>
             </div>
-
-            <div className="flex flex-col gap-7 flex-1 overflow-y-auto pb-2">
-
-              {/* Locatie */}
-              <div>
-                <label className="text-[10px] font-mono tracking-[0.2em] text-[var(--text-muted)] mb-3 block uppercase">
-                  Waar zijn jullie?
-                </label>
-                <div className="grid grid-cols-2 gap-2.5">
-                  {SETTINGS.map(s => (
-                    <button
-                      key={s.value}
-                      onClick={() => setSetting(s.value)}
-                      className={`
-                        text-left p-4 rounded-2xl border transition-all duration-150
-                        ${setting === s.value
-                          ? 'border-[var(--mint)] bg-[var(--mint)]/10'
-                          : 'border-[var(--border)] bg-[var(--bg-card)]'
-                        }
-                      `}
-                    >
-                      <span className="text-2xl block mb-2">{s.emoji}</span>
-                      <span className={`text-sm font-bold block leading-tight ${setting === s.value ? 'text-[var(--mint)]' : 'text-[var(--text-primary)]'}`}>
-                        {s.label}
-                      </span>
-                      <span className="text-[10px] text-[var(--text-muted)] mt-0.5 block leading-snug">
-                        {s.sub}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Groep */}
-              <div>
-                <label className="text-[10px] font-mono tracking-[0.2em] text-[var(--text-muted)] mb-3 block uppercase">
-                  Wie zitten er bij?
-                </label>
-                <div className="grid grid-cols-2 gap-2.5">
-                  {GROEPEN.map(g => (
-                    <button
-                      key={g.value}
-                      onClick={() => setGroep(g.value)}
-                      className={`
-                        text-left p-4 rounded-2xl border transition-all duration-150
-                        ${groep === g.value
-                          ? 'border-[var(--gold)] bg-[var(--gold)]/10'
-                          : 'border-[var(--border)] bg-[var(--bg-card)]'
-                        }
-                      `}
-                    >
-                      <span className="text-2xl block mb-2">{g.emoji}</span>
-                      <span className={`text-sm font-bold block leading-tight ${groep === g.value ? 'text-[var(--gold)]' : 'text-[var(--text-primary)]'}`}>
-                        {g.label}
-                      </span>
-                      <span className="text-[10px] text-[var(--text-muted)] mt-0.5 block leading-snug">
-                        {g.sub}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Intensiteit */}
-              <div>
-                <label className="text-[10px] font-mono tracking-[0.2em] text-[var(--text-muted)] mb-3 block uppercase">
-                  Hoe ver gaan we?
-                </label>
-                <div className="flex flex-col gap-2">
-                  {BOLDNESS_OPTIONS.map(b => (
-                    <button
-                      key={b.value}
-                      onClick={() => setBoldness(b.value)}
-                      className={`
-                        flex items-center gap-4 p-4 rounded-2xl border text-left transition-all duration-150
-                        ${boldness === b.value
-                          ? 'border-[var(--border)]'
-                          : 'border-[var(--border)] bg-[var(--bg-card)] opacity-60'
-                        }
-                      `}
-                      style={boldness === b.value ? { borderColor: b.color, background: `color-mix(in srgb, ${b.color} 10%, transparent)` } : {}}
-                    >
-                      <span className="text-2xl shrink-0">{b.emoji}</span>
-                      <div className="flex-1 min-w-0">
-                        <span
-                          className="text-sm font-bold block"
-                          style={boldness === b.value ? { color: b.color } : { color: 'var(--text-primary)' }}
-                        >
-                          {b.label}
-                        </span>
-                        <span className="text-[10px] text-[var(--text-muted)] block mt-0.5 leading-snug">
-                          {b.sub}
-                        </span>
-                      </div>
-                      {boldness === b.value && (
-                        <span className="text-xs font-mono shrink-0" style={{ color: b.color }}>✓</span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Rondes */}
-              <div>
-                <div className="flex justify-between items-center mb-3">
-                  <label className="text-[10px] font-mono tracking-[0.2em] text-[var(--text-muted)] uppercase">
-                    Aantal rondes
-                  </label>
-                  <span className="text-xs font-mono text-[var(--text-muted)]">→ {rounds}</span>
-                </div>
-                <div className="flex gap-2">
-                  {([5, 10, 20] as const).map(r => (
-                    <button
-                      key={r}
-                      onClick={() => setRounds(r)}
-                      className={`flex-1 py-2 rounded-full font-semibold text-sm transition-all ${
-                        rounds === r
-                          ? 'bg-[var(--mint)] text-[var(--bg-primary)]'
-                          : 'bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-muted)]'
-                      }`}
-                    >
-                      {r}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {error && <p className="text-[var(--coral)] text-sm">{error}</p>}
+            <div className="flex flex-col gap-3 flex-1">
+              {SETTINGS.map(s => (
+                <button
+                  key={s.value}
+                  onClick={() => setSetting(s.value)}
+                  className={`flex items-center gap-5 p-5 rounded-3xl border text-left transition-all ${
+                    setting === s.value
+                      ? 'border-[var(--mint)] bg-[var(--mint)]/10'
+                      : 'border-[var(--border)] bg-[var(--bg-card)]'
+                  }`}
+                >
+                  <span className="text-4xl shrink-0">{s.emoji}</span>
+                  <div className="flex-1 min-w-0">
+                    <span className={`text-lg font-bold block ${setting === s.value ? 'text-[var(--mint)]' : 'text-[var(--text-primary)]'}`}>
+                      {s.label}
+                    </span>
+                    <span className="text-sm text-[var(--text-muted)]">{s.sub}</span>
+                  </div>
+                  {setting === s.value && (
+                    <span className="text-[var(--mint)] text-lg shrink-0">✓</span>
+                  )}
+                </button>
+              ))}
             </div>
+          </>
+        )}
+
+        {/* ── Step 3: Groep ─────────────────────────────────────────────── */}
+        {step === 3 && (
+          <>
+            <div className="mb-8">
+              <h1 className="text-4xl font-bold leading-tight">
+                wie zitten<br />
+                <span className="italic text-[var(--gold)]">er bij?</span>
+              </h1>
+            </div>
+            <div className="flex flex-col gap-3 flex-1">
+              {GROEPEN.map(g => (
+                <button
+                  key={g.value}
+                  onClick={() => setGroep(g.value)}
+                  className={`flex items-center gap-5 p-5 rounded-3xl border text-left transition-all ${
+                    groep === g.value
+                      ? 'border-[var(--gold)] bg-[var(--gold)]/10'
+                      : 'border-[var(--border)] bg-[var(--bg-card)]'
+                  }`}
+                >
+                  <span className="text-4xl shrink-0">{g.emoji}</span>
+                  <div className="flex-1 min-w-0">
+                    <span className={`text-lg font-bold block ${groep === g.value ? 'text-[var(--gold)]' : 'text-[var(--text-primary)]'}`}>
+                      {g.label}
+                    </span>
+                    <span className="text-sm text-[var(--text-muted)]">{g.sub}</span>
+                  </div>
+                  {groep === g.value && (
+                    <span className="text-[var(--gold)] text-lg shrink-0">✓</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* ── Step 4: Intensiteit ──────────────────────────────────────── */}
+        {step === 4 && (
+          <>
+            <div className="mb-8">
+              <h1 className="text-4xl font-bold leading-tight">
+                hoe ver<br />
+                <span className="italic text-[var(--coral)]">gaan we?</span>
+              </h1>
+            </div>
+            <div className="flex flex-col gap-3 flex-1">
+              {BOLDNESS_OPTIONS.map(b => (
+                <button
+                  key={b.value}
+                  onClick={() => setBoldness(b.value)}
+                  className={`flex items-center gap-5 p-5 rounded-3xl border text-left transition-all ${
+                    boldness === b.value
+                      ? 'border-[var(--border)]'
+                      : 'border-[var(--border)] bg-[var(--bg-card)] opacity-60'
+                  }`}
+                  style={boldness === b.value
+                    ? { borderColor: b.color, background: `color-mix(in srgb, ${b.color} 10%, transparent)` }
+                    : {}
+                  }
+                >
+                  <span className="text-4xl shrink-0">{b.emoji}</span>
+                  <div className="flex-1 min-w-0">
+                    <span
+                      className="text-lg font-bold block"
+                      style={{ color: boldness === b.value ? b.color : 'var(--text-primary)' }}
+                    >
+                      {b.label}
+                    </span>
+                    <span className="text-sm text-[var(--text-muted)] leading-snug">{b.sub}</span>
+                  </div>
+                  {boldness === b.value && (
+                    <span className="text-lg shrink-0" style={{ color: b.color }}>✓</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* ── Step 5: Rondes ────────────────────────────────────────────── */}
+        {step === 5 && (
+          <>
+            <div className="mb-8">
+              <h1 className="text-4xl font-bold leading-tight">
+                hoeveel<br />
+                <span className="italic text-[var(--mint)]">rondes?</span>
+              </h1>
+            </div>
+            <div className="flex flex-col gap-4 flex-1">
+              {([5, 10, 20] as const).map(r => (
+                <button
+                  key={r}
+                  onClick={() => setRounds(r)}
+                  className={`flex items-center gap-5 p-6 rounded-3xl border text-left transition-all ${
+                    rounds === r
+                      ? 'border-[var(--mint)] bg-[var(--mint)]/10'
+                      : 'border-[var(--border)] bg-[var(--bg-card)]'
+                  }`}
+                >
+                  <span className={`text-5xl font-bold font-mono ${rounds === r ? 'text-[var(--mint)]' : 'text-[var(--text-muted)]'}`}>
+                    {r}
+                  </span>
+                  <div className="flex-1">
+                    <span className={`text-lg font-bold block ${rounds === r ? 'text-[var(--mint)]' : 'text-[var(--text-primary)]'}`}>
+                      {r === 5 ? 'Snelle ronde' : r === 10 ? 'Standaard avond' : 'Lange nacht'}
+                    </span>
+                    <span className="text-sm text-[var(--text-muted)]">
+                      {r === 5 ? 'in en uit, ~15 min' : r === 10 ? 'de klassieker, ~30 min' : 'niemand gaat vroeg naar huis'}
+                    </span>
+                  </div>
+                  {rounds === r && <span className="text-[var(--mint)] text-lg shrink-0">✓</span>}
+                </button>
+              ))}
+            </div>
+            {error && <p className="text-[var(--coral)] text-sm mt-4">{error}</p>}
           </>
         )}
 
         {/* CTA */}
         <div className="py-6">
-          {step === 1 ? (
-            <Button variant="mint" fullWidth size="lg" onClick={() => setStep(2)}>
-              Next →
+          {step < TOTAL_STEPS ? (
+            <Button variant="mint" fullWidth size="lg" onClick={next}>
+              Volgende →
             </Button>
           ) : (
-            <Button variant="mint" fullWidth size="lg" disabled={loading} onClick={handleCreateParty}>
+            <Button variant="mint" fullWidth size="lg" disabled={loading} onClick={handleCreate}>
               {loading ? 'Room aanmaken…' : 'Vragen genereren →'}
             </Button>
           )}
