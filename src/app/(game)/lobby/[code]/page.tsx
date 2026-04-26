@@ -157,7 +157,7 @@ export default function LobbyPage({ params }: LobbyPageProps) {
             SPELERS ({players.length})
           </p>
           {players.map((player) => (
-            <PlayerRow key={player.id} player={player} />
+            <PlayerRow key={player.id} player={player} isMe={player.id === playerId} />
           ))}
         </div>
 

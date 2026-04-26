@@ -3,6 +3,7 @@ import type { RoomPlayer } from '@/types'
 
 interface PlayerRowProps {
   player: RoomPlayer
+  isMe?: boolean
   selectable?: boolean
   selected?: boolean
   onSelect?: () => void
@@ -10,7 +11,7 @@ interface PlayerRowProps {
   rank?: number
 }
 
-export function PlayerRow({ player, selectable, selected, onSelect, showScore, rank }: PlayerRowProps) {
+export function PlayerRow({ player, isMe, selectable, selected, onSelect, showScore, rank }: PlayerRowProps) {
   return (
     <button
       onClick={onSelect}
@@ -21,7 +22,9 @@ export function PlayerRow({ player, selectable, selected, onSelect, showScore, r
         ${selectable ? 'cursor-pointer' : 'cursor-default'}
         ${selected
           ? 'bg-[var(--coral)] text-white'
-          : 'bg-[var(--bg-card)] hover:bg-[var(--bg-card-hover)]'
+          : isMe
+            ? 'bg-[var(--bg-card)] ring-1 ring-[var(--mint)] ring-offset-1 ring-offset-[var(--bg-primary)]'
+            : 'bg-[var(--bg-card)] hover:bg-[var(--bg-card-hover)]'
         }
       `}
     >
@@ -35,6 +38,9 @@ export function PlayerRow({ player, selectable, selected, onSelect, showScore, r
       />
       <span className="flex-1 text-left font-semibold text-[var(--text-primary)]">
         {player.display_name}
+        {isMe && (
+          <span className="ml-2 text-[10px] font-mono tracking-widest text-[var(--mint)] opacity-80">JIJ</span>
+        )}
       </span>
       {player.is_host && (
         <span className="text-xs font-mono tracking-widest border border-[var(--mint)] text-[var(--mint)] px-2 py-0.5 rounded-full">

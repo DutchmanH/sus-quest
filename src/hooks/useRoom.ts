@@ -10,16 +10,16 @@ export function useRoom(code: string) {
   const [currentRound, setCurrentRound] = useState<Round | null>(null)
   const [loading, setLoading] = useState(true)
 
-  // Single client instance for the lifetime of this hook
   const supabase = useRef(createClient()).current
+  // roomId becomes available after initial fetch; realtime handlers read it via ref
+  const roomIdRef = useRef<string | undefined>(undefined)
 
   useEffect(() => {
     if (!code) return
 
     let cancelled = false
-    let channel: ReturnType<typeof supabase.channel> | null = null
 
-    async function init() {
+    async function loadInitialData() {
       try {
         const { data: roomData, error: roomError } = await supabase
           .from('rooms')
@@ -29,76 +29,79 @@ export function useRoom(code: string) {
 
         if (cancelled || roomError || !roomData) return
 
-        const roomId = roomData.id
+        roomIdRef.current = roomData.id
         setRoom(roomData as Room)
 
-        // Fetch players and current round in parallel
         const needsRound = roomData.status === 'playing' || roomData.status === 'finished'
         const [{ data: playersData }, { data: roundData }] = await Promise.all([
           supabase
             .from('room_players')
             .select('*')
-            .eq('room_id', roomId)
+            .eq('room_id', roomData.id)
             .order('joined_at', { ascending: true }),
           needsRound
             ? supabase
                 .from('rounds')
                 .select('*')
-                .eq('room_id', roomId)
+                .eq('room_id', roomData.id)
                 .eq('round_number', roomData.current_round)
                 .maybeSingle()
             : Promise.resolve({ data: null }),
         ])
 
         if (cancelled) return
-
         setPlayers((playersData ?? []) as RoomPlayer[])
         if (roundData) setCurrentRound(roundData as Round)
-
-        // Set up realtime subscriptions now that we have roomId
-        channel = supabase
-          .channel(`room-${code}`)
-          .on(
-            'postgres_changes',
-            { event: '*', schema: 'public', table: 'rooms', filter: `code=eq.${code.toUpperCase()}` },
-            (payload) => {
-              if (payload.eventType === 'UPDATE') setRoom(payload.new as Room)
-            }
-          )
-          .on(
-            'postgres_changes',
-            { event: '*', schema: 'public', table: 'room_players', filter: `room_id=eq.${roomId}` },
-            async () => {
-              const { data } = await supabase
-                .from('room_players')
-                .select('*')
-                .eq('room_id', roomId)
-                .order('joined_at', { ascending: true })
-              if (!cancelled) setPlayers((data ?? []) as RoomPlayer[])
-            }
-          )
-          .on(
-            'postgres_changes',
-            { event: 'UPDATE', schema: 'public', table: 'rounds', filter: `room_id=eq.${roomId}` },
-            (payload) => {
-              const updated = payload.new as Round
-              setCurrentRound((prev) => {
-                if (prev?.id === updated.id || updated.status === 'active') return updated
-                return prev
-              })
-            }
-          )
-          .subscribe()
       } finally {
         if (!cancelled) setLoading(false)
       }
     }
 
-    init()
+    loadInitialData()
+
+    // Subscribe immediately so no events are missed while initial data loads.
+    // roomIdRef.current is checked at event-handler time, not subscription-setup time,
+    // so we don't need a server-side filter (which requires REPLICA IDENTITY FULL).
+    const channel = supabase
+      .channel(`room-${code}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'rooms', filter: `code=eq.${code.toUpperCase()}` },
+        (payload) => {
+          if (payload.eventType === 'UPDATE') setRoom(payload.new as Room)
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'room_players' },
+        async () => {
+          const roomId = roomIdRef.current
+          if (!roomId) return
+          const { data } = await supabase
+            .from('room_players')
+            .select('*')
+            .eq('room_id', roomId)
+            .order('joined_at', { ascending: true })
+          if (!cancelled) setPlayers((data ?? []) as RoomPlayer[])
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'rounds' },
+        (payload) => {
+          const updated = payload.new as Round
+          if (roomIdRef.current && updated.room_id !== roomIdRef.current) return
+          setCurrentRound((prev) => {
+            if (prev?.id === updated.id || updated.status === 'active') return updated
+            return prev
+          })
+        }
+      )
+      .subscribe()
 
     return () => {
       cancelled = true
-      if (channel) supabase.removeChannel(channel)
+      supabase.removeChannel(channel)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code])
