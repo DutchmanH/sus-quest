@@ -47,27 +47,30 @@ export default function AccusePage({ params }: AccusePageProps) {
     if (!currentRound || !isHost) return
     const supabase = createClient()
 
-    // Resolve accusations
     const { data: accusations } = await supabase
       .from('accusations')
       .select('*')
       .eq('round_id', currentRound.id)
 
-    // Update is_correct for each accusation
-    for (const acc of accusations ?? []) {
-      const correct = acc.accused_player_id === currentRound.sidequest_player_id
-      await supabase.from('accusations').update({ is_correct: correct }).eq('id', acc.id)
+    const list = accusations ?? []
+    const susId = currentRound.sidequest_player_id
 
-      // Update scores
-      const delta = correct ? 1 : -1
-      await supabase.rpc('increment_score', { player_id: acc.accuser_player_id, delta })
-    }
+    // Resolve all accusation updates + score changes in parallel
+    await Promise.all(
+      list.map((acc) => {
+        const correct = acc.accused_player_id === susId
+        return Promise.all([
+          supabase.from('accusations').update({ is_correct: correct }).eq('id', acc.id),
+          supabase.rpc('increment_score', { player_id: acc.accuser_player_id, delta: correct ? 1 : -1 }),
+        ])
+      })
+    )
 
-    // Give sidequest player their point (if succeeded = not caught)
-    if (currentRound.sidequest_player_id) {
-      const wasCaught = accusations?.some(a => a.accused_player_id === currentRound.sidequest_player_id && a.is_correct)
+    // Sidequest player scores if not caught
+    if (susId) {
+      const wasCaught = list.some((a) => a.accused_player_id === susId)
       if (!wasCaught) {
-        await supabase.rpc('increment_score', { player_id: currentRound.sidequest_player_id, delta: 1 })
+        await supabase.rpc('increment_score', { player_id: susId, delta: 1 })
       }
     }
 

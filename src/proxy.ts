@@ -25,12 +25,11 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
-
   const { pathname } = request.nextUrl
 
-  // Protect /admin routes
   if (pathname.startsWith('/admin')) {
+    // Admin routes need server-validated user (network call, but only for /admin)
+    const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
       return NextResponse.redirect(new URL('/login', request.url))
     }
@@ -39,15 +38,15 @@ export async function proxy(request: NextRequest) {
       .select('is_admin')
       .eq('id', user.id)
       .single()
-
     if (!profile?.is_admin) {
       return NextResponse.redirect(new URL('/', request.url))
     }
-  }
-
-  // Redirect logged-in users away from auth pages and home → dashboard
-  if (user && (pathname === '/login' || pathname === '/register' || pathname === '/')) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
+  } else if (pathname === '/login' || pathname === '/register' || pathname === '/') {
+    // Auth-page redirects: read session from cookie (no network call)
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session) {
+      return NextResponse.redirect(new URL('/dashboard', request.url))
+    }
   }
 
   return supabaseResponse

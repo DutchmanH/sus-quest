@@ -45,18 +45,20 @@ Regels:
 - sidequest is een geheime persoonlijke opdracht die iemand ongemerkt moet uitvoeren
 - fakeTask is een nep-opdracht die niks opvalt (bijv. "Doe niets opvallends deze ronde")
 
-Antwoord UITSLUITEND als valid JSON array, geen uitleg, geen markdown:
-[
-  {
-    "mainQuestion": { "nl": "...", "en": "..." },
-    "hasSidequest": true,
-    "sidequest": {
-      "playerIndex": 2,
-      "text": { "nl": "...", "en": "..." }
-    },
-    "fakeTask": { "nl": "...", "en": "..." }
-  }
-]
+Antwoord als JSON object met een "rounds" array, geen uitleg, geen markdown:
+{
+  "rounds": [
+    {
+      "mainQuestion": { "nl": "...", "en": "..." },
+      "hasSidequest": true,
+      "sidequest": {
+        "playerIndex": 2,
+        "text": { "nl": "...", "en": "..." }
+      },
+      "fakeTask": { "nl": "...", "en": "..." }
+    }
+  ]
+}
 
 Bij hasSidequest: false, laat het sidequest veld weg.`
 
@@ -64,20 +66,22 @@ Bij hasSidequest: false, laat het sidequest veld weg.`
   const completion = await openai.chat.completions.create({
     model: 'gpt-4o',
     messages: [{ role: 'user', content: prompt }],
-    temperature: 0.9,
+    temperature: 0.8,
     response_format: { type: 'json_object' },
   })
 
-  const content = completion.choices[0].message.content ?? '{}'
+  const raw = completion.choices[0].message.content ?? '{}'
 
-  // The model may wrap in an object, try both
-  let parsed: GeneratedRound[]
+  let parsed: { rounds: GeneratedRound[] }
   try {
-    const raw = JSON.parse(content)
-    parsed = Array.isArray(raw) ? raw : (raw.rounds ?? raw.data ?? Object.values(raw)[0])
+    parsed = JSON.parse(raw)
   } catch {
     throw new Error('OpenAI returned invalid JSON')
   }
 
-  return parsed
+  if (!Array.isArray(parsed.rounds) || parsed.rounds.length === 0) {
+    throw new Error(`OpenAI returned invalid rounds: ${raw}`)
+  }
+
+  return parsed.rounds
 }

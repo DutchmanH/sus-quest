@@ -38,29 +38,30 @@ export default function RevealPage({ params }: RevealPageProps) {
     if (!room || !currentRound || !isHost) return
     const supabase = createClient()
 
-    // Mark current round done
-    await supabase.from('rounds').update({ status: 'done' }).eq('id', currentRound.id)
-
     const nextRoundNum = room.current_round + 1
 
     if (nextRoundNum > room.rounds_total) {
-      // Game over
-      await supabase.from('rooms').update({ status: 'finished' }).eq('id', room.id)
+      // Game over: mark round done and room finished in parallel
+      await Promise.all([
+        supabase.from('rounds').update({ status: 'done' }).eq('id', currentRound.id),
+        supabase.from('rooms').update({ status: 'finished' }).eq('id', room.id),
+      ])
       router.push(`/game/${code}/end`)
       return
     }
 
-    // Activate next round
-    const { data: nextRound } = await supabase
-      .from('rounds')
-      .select('id')
-      .eq('room_id', room.id)
-      .eq('round_number', nextRoundNum)
-      .single()
+    // Fetch next round and mark current done in parallel
+    const [, { data: nextRoundRow }] = await Promise.all([
+      supabase.from('rounds').update({ status: 'done' }).eq('id', currentRound.id),
+      supabase.from('rounds').select('id').eq('room_id', room.id).eq('round_number', nextRoundNum).single(),
+    ])
 
-    if (nextRound) {
-      await supabase.from('rounds').update({ status: 'active' }).eq('id', nextRound.id)
-      await supabase.from('rooms').update({ current_round: nextRoundNum }).eq('id', room.id)
+    if (nextRoundRow) {
+      // Activate next round and update room counter in parallel
+      await Promise.all([
+        supabase.from('rounds').update({ status: 'active' }).eq('id', nextRoundRow.id),
+        supabase.from('rooms').update({ current_round: nextRoundNum }).eq('id', room.id),
+      ])
     }
 
     router.push(`/game/${code}`)

@@ -1,14 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { generateRounds } from '@/lib/openai'
 import type { Vibe, ContentLevel } from '@/types'
 
 export async function POST(request: NextRequest) {
+  // Auth check — must be logged in to trigger generation
+  const authClient = await createClient()
+  const { data: { user } } = await authClient.auth.getUser()
+  if (!user) {
+    return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 })
+  }
+
+  // Parse body once, before try-catch so roomCode is available for error recovery
+  let roomCode: string
   try {
-    const { roomCode } = await request.json()
+    const body = await request.json()
+    roomCode = body.roomCode
+  } catch {
+    return NextResponse.json({ error: 'Ongeldig verzoek' }, { status: 400 })
+  }
 
-    const supabase = await createServiceClient()
+  if (!roomCode) {
+    return NextResponse.json({ error: 'roomCode is verplicht' }, { status: 400 })
+  }
 
+  const supabase = await createServiceClient()
+
+  try {
     // Load room
     const { data: room, error: roomError } = await supabase
       .from('rooms')
@@ -20,24 +38,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Room niet gevonden' }, { status: 404 })
     }
 
-    // Load players
-    const { data: players } = await supabase
-      .from('room_players')
-      .select('id')
-      .eq('room_id', room.id)
+    // Verify the caller is the host
+    if (room.host_id !== user.id) {
+      return NextResponse.json({ error: 'Alleen de host kan het spel starten' }, { status: 403 })
+    }
+
+    // Load players and set status in parallel
+    const [{ data: players }] = await Promise.all([
+      supabase.from('room_players').select('id').eq('room_id', room.id),
+      supabase.from('rooms').update({ status: 'generating' }).eq('id', room.id),
+    ])
 
     const playerIds = players?.map((p: { id: string }) => p.id) ?? []
     const playerCount = playerIds.length
 
     if (playerCount < 2) {
+      await supabase.from('rooms').update({ status: 'lobby' }).eq('id', room.id)
       return NextResponse.json({ error: 'Minimaal 2 spelers nodig' }, { status: 400 })
     }
-
-    // Update room status to generating
-    await supabase
-      .from('rooms')
-      .update({ status: 'generating' })
-      .eq('id', room.id)
 
     // Generate rounds via OpenAI
     const generatedRounds = await generateRounds(
@@ -72,28 +90,19 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    const { error: insertError } = await supabase
-      .from('rounds')
-      .insert(roundsToInsert)
-
+    const { error: insertError } = await supabase.from('rounds').insert(roundsToInsert)
     if (insertError) throw insertError
 
-    // Update room to playing, current_round = 1
-    await supabase
-      .from('rooms')
-      .update({ status: 'playing', current_round: 1 })
-      .eq('id', room.id)
+    await supabase.from('rooms').update({ status: 'playing', current_round: 1 }).eq('id', room.id)
 
     return NextResponse.json({ success: true, roundCount: roundsToInsert.length })
   } catch (err) {
     console.error('Generate error:', err instanceof Error ? err.message : err)
     console.error('Generate stack:', err instanceof Error ? err.stack : 'no stack')
 
-    // Reset room status on error
+    // Reset room to lobby so host can retry — roomCode is already parsed above
     try {
-      const supabase = await createServiceClient()
-      const { roomCode } = await request.clone().json()
-      await supabase.from('rooms').update({ status: 'lobby' }).eq('code', roomCode)
+      await supabase.from('rooms').update({ status: 'lobby' }).eq('code', roomCode.toUpperCase())
     } catch {}
 
     return NextResponse.json({ error: 'Genereren mislukt' }, { status: 500 })
