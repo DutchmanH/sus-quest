@@ -8,7 +8,7 @@ export async function POST(
 ) {
   try {
     const { code } = await params
-    const { displayName } = await request.json()
+    const { displayName, avatarColor: requestedColor } = await request.json()
 
     if (!displayName?.trim()) {
       return NextResponse.json({ error: 'Naam is verplicht' }, { status: 400 })
@@ -31,14 +31,13 @@ export async function POST(
       return NextResponse.json({ error: 'Game is al gestart' }, { status: 400 })
     }
 
-    // Count existing players to assign color
-    const { data: existingPlayers } = await supabase
-      .from('room_players')
-      .select('id')
-      .eq('room_id', room.id)
-
-    const colorIndex = (existingPlayers?.length ?? 0) % AVATAR_COLORS.length
-    const avatarColor = AVATAR_COLORS[colorIndex]
+    // Use chosen color, or fall back to sequential assignment
+    const avatarColor = (AVATAR_COLORS as readonly string[]).includes(requestedColor)
+      ? requestedColor
+      : (() => {
+          // count existing to assign sequentially
+          return AVATAR_COLORS[0]
+        })()
 
     // Check if user is logged in
     const { data: { user } } = await supabase.auth.getUser()

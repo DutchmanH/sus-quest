@@ -4,6 +4,7 @@ import type { RoomPlayer } from '@/types'
 interface PlayerRowProps {
   player: RoomPlayer
   isMe?: boolean
+  icon?: string
   selectable?: boolean
   selected?: boolean
   onSelect?: () => void
@@ -11,7 +12,7 @@ interface PlayerRowProps {
   rank?: number
 }
 
-export function PlayerRow({ player, isMe, selectable, selected, onSelect, showScore, rank }: PlayerRowProps) {
+export function PlayerRow({ player, isMe, icon, selectable, selected, onSelect, showScore, rank }: PlayerRowProps) {
   return (
     <button
       onClick={onSelect}
@@ -34,6 +35,7 @@ export function PlayerRow({ player, isMe, selectable, selected, onSelect, showSc
       <Avatar
         name={player.display_name}
         color={selected ? '#fff' : player.avatar_color}
+        icon={icon}
         size="md"
       />
       <span className="flex-1 text-left font-semibold text-[var(--text-primary)]">

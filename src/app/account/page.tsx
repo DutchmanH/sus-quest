@@ -7,21 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { Avatar } from '@/components/ui/Avatar'
 import { useGameStore } from '@/store/gameStore'
 import { AVATAR_COLORS } from '@/types'
-
-const AVATAR_PRESETS = [
-  { icon: '🕵️' },
-  { icon: '🦝' },
-  { icon: '🧃' },
-  { icon: '🛸' },
-  { icon: '🐸' },
-  { icon: '🫥' },
-  { icon: '😈' },
-  { icon: '🤖' },
-  { icon: '👻' },
-  { icon: '🐙' },
-  { icon: '🦊' },
-  { icon: '🐼' },
-] as const
+import { AVATAR_ICONS, DEFAULT_ICON } from '@/lib/avatars'
 
 export default function AccountPage() {
   const router = useRouter()
@@ -29,7 +15,7 @@ export default function AccountPage() {
 
   const [username, setUsername] = useState('')
   const [avatarColor, setAvatarColor] = useState(AVATAR_COLORS[0])
-  const [avatarIcon, setAvatarIcon] = useState<string>('🕵️')
+  const [avatarIcon, setAvatarIcon] = useState<string>(DEFAULT_ICON)
   const [theme, setTheme] = useState<'dark' | 'light'>(() =>
     typeof window !== 'undefined' && localStorage.getItem('susquest-theme') === 'light' ? 'light' : 'dark'
   )
@@ -169,22 +155,22 @@ export default function AccountPage() {
               Avatar kiezen
             </label>
             <div className="grid grid-cols-6 gap-3">
-              {AVATAR_PRESETS.map((preset) => (
+              {AVATAR_ICONS.map((icon) => (
                 <button
-                  key={preset.icon}
+                  key={icon}
                   onClick={() => {
-                    setAvatarIcon(preset.icon)
+                    setAvatarIcon(icon)
                     setSaved(false)
                   }}
-                  className="w-12 h-12 rounded-full flex items-center justify-center transition-all border"
+                  className="w-12 h-12 rounded-full flex items-center justify-center transition-all"
                   style={{
                     background: 'var(--mint)',
-                    borderColor: avatarIcon === preset.icon ? 'var(--text-primary)' : 'var(--mint)',
-                    boxShadow: avatarIcon === preset.icon ? '0 0 0 2px var(--bg-primary), 0 0 0 4px var(--mint)' : 'none',
+                    outline: avatarIcon === icon ? '3px solid var(--text-primary)' : '3px solid transparent',
+                    outlineOffset: '2px',
                   }}
-                  aria-label={`Avatar ${preset.icon}`}
+                  aria-label={`Avatar ${icon}`}
                 >
-                  <span className="text-xl text-[var(--bg-primary)]">{preset.icon}</span>
+                  <span className="text-xl">{icon}</span>
                 </button>
               ))}
             </div>
