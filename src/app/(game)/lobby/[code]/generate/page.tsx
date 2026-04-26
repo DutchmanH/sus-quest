@@ -4,6 +4,7 @@ import { use, useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { MobileContainer } from '@/components/layout/MobileContainer'
 import { Button } from '@/components/ui/Button'
+import { GeneratingLoader } from '@/components/game/GeneratingLoader'
 import { useGameStore } from '@/store/gameStore'
 import type { Round } from '@/types'
 
@@ -68,17 +69,7 @@ export default function GeneratePage({ params }: GeneratePageProps) {
   }, [code, generate])
 
   if (generating) {
-    return (
-      <MobileContainer>
-        <div className="flex-1 flex items-center justify-center px-5">
-          <div className="text-center">
-            <div className="w-12 h-12 border-2 border-[var(--coral)] border-t-transparent rounded-full animate-spin mx-auto mb-5" />
-            <p className="text-[var(--text-primary)] font-semibold mb-1">vragen genereren…</p>
-            <p className="text-[var(--text-muted)] text-xs font-mono opacity-60">even geduld, dit duurt ~10 seconden</p>
-          </div>
-        </div>
-      </MobileContainer>
-    )
+    return <GeneratingLoader />
   }
 
   if (!loaded) {

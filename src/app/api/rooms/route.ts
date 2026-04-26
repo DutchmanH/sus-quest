@@ -16,12 +16,13 @@ export async function POST(request: NextRequest) {
   const supabase = await createServiceClient()
 
   // Read optional settings from body
-  let rounds_total = 10, vibe = 'chaos', content_level = 'spicy'
+  let rounds_total = 10, vibe = 'feest', content_level = 'blozen', groep = 'vrienden'
   try {
     const body = await request.json()
     if (body.rounds_total) rounds_total = body.rounds_total
     if (body.vibe) vibe = body.vibe
     if (body.content_level) content_level = body.content_level
+    if (body.groep) groep = body.groep
   } catch { /* no body is fine */ }
 
   // Ensure profile exists (trigger may have failed on registration)
@@ -58,7 +59,7 @@ export async function POST(request: NextRequest) {
   // Create room
   const { data: room, error: roomError } = await supabase
     .from('rooms')
-    .insert({ code, host_id: user.id, rounds_total, vibe, content_level })
+    .insert({ code, host_id: user.id, rounds_total, vibe, content_level, groep })
     .select()
     .single()
 

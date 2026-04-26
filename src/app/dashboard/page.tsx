@@ -29,7 +29,7 @@ function statusBadge(status: string) {
 }
 
 function sessionDestination(status: string, code: string) {
-  if (status === 'playing' || status === 'generating') return `/game/${code}`
+  if (status === 'playing') return `/game/${code}`
   return `/lobby/${code}`
 }
 
@@ -37,9 +37,13 @@ export default function DashboardPage() {
   const router = useRouter()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [sessions, setSessions] = useState<Session[]>([])
+  const [avatarIcon, setAvatarIcon] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    const storedIcon = localStorage.getItem('susquest-avatar-icon')
+    if (storedIcon) setAvatarIcon(storedIcon)
+
     fetch('/api/sessions')
       .then(r => r.json())
       .then(data => {
@@ -97,6 +101,7 @@ export default function DashboardPage() {
           <Avatar
             name={profile?.username ?? '?'}
             color={profile?.avatar_color ?? '#5DEDD4'}
+            icon={avatarIcon ?? undefined}
             size="xl"
           />
           <div>
@@ -121,7 +126,7 @@ export default function DashboardPage() {
             variant="mint"
             fullWidth
             size="lg"
-            onClick={() => router.push('/mode')}
+            onClick={() => router.push('/create-party')}
           >
             Nieuw spel starten ⚡
           </Button>

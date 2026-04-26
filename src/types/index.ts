@@ -4,6 +4,11 @@ export type RoundStatus = 'pending' | 'active' | 'accuse' | 'reveal' | 'done'
 export type Vibe = 'chill' | 'chaos' | 'awkward' | 'spicy' | 'comp'
 export type ContentLevel = 'safe' | 'spicy' | 'extra_spicy'
 
+// New settings system (replaces vibe + content_level in UI)
+export type Setting = 'bank' | 'feest' | 'after_midnight' | 'onderweg'
+export type Groep = 'vrienden' | 'vreemden' | 'stelletjes' | 'familie'
+export type Boldness = 'gezellig' | 'blozen' | 'niemand_veilig'
+
 export interface Profile {
   id: string
   username: string
@@ -21,8 +26,9 @@ export interface Room {
   status: RoomStatus
   rounds_total: number
   current_round: number
-  vibe: Vibe
-  content_level: ContentLevel
+  vibe: string
+  content_level: string
+  groep: string
   language: string
   created_at: string
 }

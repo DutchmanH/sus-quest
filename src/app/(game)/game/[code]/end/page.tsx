@@ -91,7 +91,7 @@ export default function EndPage({ params }: EndPageProps) {
           <Button variant="dark" size="md" className="flex-1" onClick={() => router.push('/')}>
             home
           </Button>
-          <Button variant="mint" size="md" className="flex-1" onClick={() => router.push('/mode')}>
+          <Button variant="mint" size="md" className="flex-1" onClick={() => router.push('/create-party')}>
             replay ↻
           </Button>
         </div>

@@ -1,6 +1,7 @@
 interface AvatarProps {
   name: string
   color: string
+  icon?: string
   size?: 'sm' | 'md' | 'lg' | 'xl'
   active?: boolean
   className?: string
@@ -13,7 +14,7 @@ const sizes = {
   xl: 'w-16 h-16 text-2xl',
 }
 
-export function Avatar({ name, color, size = 'md', active, className = '' }: AvatarProps) {
+export function Avatar({ name, color, icon, size = 'md', active, className = '' }: AvatarProps) {
   const initial = name.charAt(0).toUpperCase()
 
   return (
@@ -29,7 +30,7 @@ export function Avatar({ name, color, size = 'md', active, className = '' }: Ava
       style={{ background: color }}
       title={name}
     >
-      {initial}
+      {icon ?? initial}
     </div>
   )
 }

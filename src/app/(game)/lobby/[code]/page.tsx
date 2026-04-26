@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Avatar } from '@/components/ui/Avatar'
 import { PlayerRow } from '@/components/game/PlayerRow'
+import { GeneratingLoader } from '@/components/game/GeneratingLoader'
 import { useRoom } from '@/hooks/useRoom'
 import { useGameStore } from '@/store/gameStore'
 import { createClient } from '@/lib/supabase/client'
@@ -116,17 +117,7 @@ export default function LobbyPage({ params }: LobbyPageProps) {
   }
 
   if (starting) {
-    return (
-      <MobileContainer>
-        <div className="flex-1 flex items-center justify-center px-5">
-          <div className="text-center">
-            <div className="w-12 h-12 border-2 border-[var(--mint)] border-t-transparent rounded-full animate-spin mx-auto mb-5" />
-            <p className="text-[var(--text-primary)] font-semibold mb-1">spel starten…</p>
-            <p className="text-[var(--text-muted)] text-xs font-mono opacity-60">sidequests worden uitgedeeld</p>
-          </div>
-        </div>
-      </MobileContainer>
-    )
+    return <GeneratingLoader />
   }
 
   return (

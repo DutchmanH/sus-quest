@@ -13,16 +13,25 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Gebruikersnaam is verplicht' }, { status: 400 })
     }
 
+    const safeAvatarColor = typeof avatar_color === 'string' && avatar_color.trim().length > 0
+      ? avatar_color
+      : '#5DEDD4'
+
     const supabase = await createServiceClient()
     const { error } = await supabase
       .from('profiles')
-      .update({
+      .upsert({
+        id: user.id,
         username: username.trim(),
-        avatar_color,
-      })
-      .eq('id', user.id)
+        avatar_color: safeAvatarColor,
+      }, { onConflict: 'id' })
 
-    if (error) throw error
+    if (error) {
+      if (error.code === '23505') {
+        return NextResponse.json({ error: 'Deze gebruikersnaam bestaat al' }, { status: 409 })
+      }
+      throw error
+    }
 
     return NextResponse.json({ success: true })
   } catch (err) {
