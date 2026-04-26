@@ -22,6 +22,15 @@ export default function GeneratePage({ params }: GeneratePageProps) {
   const [error, setError] = useState<string | null>(null)
   const [loaded, setLoaded] = useState(false)
 
+  const loadRounds = useCallback(async () => {
+    const res = await fetch(`/api/rooms/${code}/rounds`)
+    if (res.ok) {
+      const data = await res.json()
+      setRounds(data.rounds ?? [])
+    }
+    setLoaded(true)
+  }, [code])
+
   const generate = useCallback(async () => {
     setGenerating(true)
     setError(null)
@@ -38,16 +47,7 @@ export default function GeneratePage({ params }: GeneratePageProps) {
     }
     await loadRounds()
     setGenerating(false)
-  }, [code])
-
-  async function loadRounds() {
-    const res = await fetch(`/api/rooms/${code}/rounds`)
-    if (res.ok) {
-      const data = await res.json()
-      setRounds(data.rounds ?? [])
-    }
-    setLoaded(true)
-  }
+  }, [code, loadRounds])
 
   useEffect(() => {
     async function init() {

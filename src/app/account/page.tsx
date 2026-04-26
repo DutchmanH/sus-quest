@@ -15,7 +15,9 @@ export default function AccountPage() {
 
   const [username, setUsername] = useState('')
   const [avatarColor, setAvatarColor] = useState(AVATAR_COLORS[0])
-  const [avatarIcon, setAvatarIcon] = useState<string>(DEFAULT_ICON)
+  const [avatarIcon, setAvatarIcon] = useState<string>(() =>
+    typeof window !== 'undefined' ? localStorage.getItem('susquest-avatar-icon') ?? DEFAULT_ICON : DEFAULT_ICON
+  )
   const [theme, setTheme] = useState<'dark' | 'light'>(() =>
     typeof window !== 'undefined' && localStorage.getItem('susquest-theme') === 'light' ? 'light' : 'dark'
   )
@@ -36,8 +38,7 @@ export default function AccountPage() {
       })
       .finally(() => setLoading(false))
 
-    const storedIcon = localStorage.getItem('susquest-avatar-icon')
-    if (storedIcon) setAvatarIcon(storedIcon)
+
   }, [])
 
   function applyTheme(t: 'dark' | 'light') {

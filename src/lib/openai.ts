@@ -1,5 +1,5 @@
 import OpenAI from 'openai'
-import type { GeneratedRound, Setting, Groep, Boldness } from '@/types'
+import type { GeneratedRound } from '@/types'
 
 function getOpenAI() {
   const apiKey = process.env.OPENAI_API_KEY

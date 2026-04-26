@@ -37,13 +37,12 @@ export default function DashboardPage() {
   const router = useRouter()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [sessions, setSessions] = useState<Session[]>([])
-  const [avatarIcon, setAvatarIcon] = useState<string | null>(null)
+  const [avatarIcon] = useState<string | null>(() =>
+    typeof window !== 'undefined' ? localStorage.getItem('susquest-avatar-icon') : null
+  )
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const storedIcon = localStorage.getItem('susquest-avatar-icon')
-    if (storedIcon) setAvatarIcon(storedIcon)
-
     fetch('/api/sessions')
       .then(r => r.json())
       .then(data => {
