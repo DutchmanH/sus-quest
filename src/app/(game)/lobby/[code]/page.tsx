@@ -23,8 +23,9 @@ export default function LobbyPage({ params }: LobbyPageProps) {
   const router = useRouter()
   const { playerId } = useGameStore()
   const { room, players, loading } = useRoom(code)
-  const [generating, setGenerating] = useState(false)
-  const [generateError, setGenerateError] = useState<string | null>(null)
+  const [starting, setStarting] = useState(false)
+  const [startError, setStartError] = useState<string | null>(null)
+  const [gearOpen, setGearOpen] = useState(false)
 
   // Own avatar icon (device-local)
   const [myIcon, setMyIcon] = useState<string>(() => {
@@ -71,18 +72,14 @@ export default function LobbyPage({ params }: LobbyPageProps) {
   }
 
   async function startGame() {
-    if (!room || generating) return
-    setGenerating(true)
-    setGenerateError(null)
-    const res = await fetch('/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ roomCode: code }),
-    })
+    if (!room || starting) return
+    setStarting(true)
+    setStartError(null)
+    const res = await fetch(`/api/rooms/${code}/start`, { method: 'POST' })
     if (!res.ok) {
       const data = await res.json()
-      setGenerateError(data.error ?? 'Genereren mislukt, probeer opnieuw')
-      setGenerating(false)
+      setStartError(data.error ?? 'Starten mislukt, probeer opnieuw')
+      setStarting(false)
     }
   }
 
@@ -118,14 +115,14 @@ export default function LobbyPage({ params }: LobbyPageProps) {
     )
   }
 
-  if (generating) {
+  if (starting) {
     return (
       <MobileContainer>
         <div className="flex-1 flex items-center justify-center px-5">
           <div className="text-center">
-            <div className="w-12 h-12 border-2 border-[var(--coral)] border-t-transparent rounded-full animate-spin mx-auto mb-5" />
-            <p className="text-[var(--text-primary)] font-semibold mb-1">vragen genereren…</p>
-            <p className="text-[var(--text-muted)] text-xs font-mono opacity-60">even geduld, dit duurt ~10 seconden</p>
+            <div className="w-12 h-12 border-2 border-[var(--mint)] border-t-transparent rounded-full animate-spin mx-auto mb-5" />
+            <p className="text-[var(--text-primary)] font-semibold mb-1">spel starten…</p>
+            <p className="text-[var(--text-muted)] text-xs font-mono opacity-60">sidequests worden uitgedeeld</p>
           </div>
         </div>
       </MobileContainer>
@@ -141,7 +138,39 @@ export default function LobbyPage({ params }: LobbyPageProps) {
           <span className="inline-block px-3 py-1 rounded-full text-xs font-mono tracking-widest border border-[var(--gold)] text-[var(--gold)]">
             LOBBY
           </span>
-          <Badge variant="live">LIVE</Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="live">LIVE</Badge>
+            {isHost && (
+              <div className="relative">
+                <button
+                  onClick={() => setGearOpen(o => !o)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                  aria-label="Host opties"
+                >
+                  ⚙
+                </button>
+                {gearOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setGearOpen(false)} />
+                    <div className="absolute right-0 top-10 z-50 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl overflow-hidden shadow-lg min-w-[180px]">
+                      <button
+                        onClick={() => { setGearOpen(false); router.push(`/lobby/${code}/generate`) }}
+                        className="w-full text-left px-4 py-3 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)] transition-colors"
+                      >
+                        Vragen bekijken →
+                      </button>
+                      <button
+                        onClick={() => { setGearOpen(false); router.push('/dashboard') }}
+                        className="w-full text-left px-4 py-3 text-sm text-[var(--coral)] hover:bg-[var(--bg-card-hover)] transition-colors border-t border-[var(--border)]"
+                      >
+                        Spel afsluiten
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Title */}
@@ -211,14 +240,14 @@ export default function LobbyPage({ params }: LobbyPageProps) {
           </p>
         </div>
 
-        {generateError && (
-          <p className="text-[var(--coral)] text-sm text-center mb-3">{generateError}</p>
+        {startError && (
+          <p className="text-[var(--coral)] text-sm text-center mb-3">{startError}</p>
         )}
 
         {/* CTAs */}
         <div className="py-6">
           {isHost ? (
-            <Button variant="mint" fullWidth size="lg" disabled={!canStart} onClick={startGame}>
+            <Button variant="mint" fullWidth size="lg" disabled={!canStart || starting} onClick={startGame}>
               {!canStart ? `Wacht op ${notReadyCount} speler(s)…` : "Let's gooo 🚀"}
             </Button>
           ) : (
