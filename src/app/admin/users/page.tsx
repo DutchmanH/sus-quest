@@ -1,4 +1,3 @@
-import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/server'
 
 export default async function AdminUsersPage() {

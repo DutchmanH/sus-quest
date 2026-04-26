@@ -100,6 +100,7 @@ export function useRoom(code: string) {
       cancelled = true
       if (channel) supabase.removeChannel(channel)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code])
 
   return { room, players, currentRound, loading }

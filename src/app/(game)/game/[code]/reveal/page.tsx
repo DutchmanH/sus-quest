@@ -29,7 +29,7 @@ export default function RevealPage({ params }: RevealPageProps) {
       .select('*')
       .eq('round_id', currentRound.id)
       .then(({ data }) => setAccusations((data ?? []) as Accusation[]))
-  }, [currentRound?.id])
+  }, [currentRound])
 
   const me = players.find(p => p.id === playerId)
   const isHost = me?.is_host ?? false

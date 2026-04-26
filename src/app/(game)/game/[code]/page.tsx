@@ -1,6 +1,6 @@
 'use client'
 
-import { use, useEffect, useState } from 'react'
+import { use, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { MobileContainer } from '@/components/layout/MobileContainer'
 import { Button } from '@/components/ui/Button'
@@ -31,6 +31,25 @@ export default function GamePage({ params }: GamePageProps) {
   }, [room?.status, currentRound, code, router])
 
   if (loading || !room || !currentRound) {
+    if (!loading && room?.status === 'generating') {
+      return (
+        <MobileContainer>
+          <div className="flex-1 flex items-center justify-center px-5">
+            <div className="text-center">
+              <div className="w-8 h-8 border-2 border-[var(--coral)] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+              <p className="text-[var(--text-muted)] text-sm font-mono">vragen genereren…</p>
+              <button
+                onClick={() => router.push(`/lobby/${code}`)}
+                className="mt-4 text-xs font-mono tracking-widest text-[var(--mint)] hover:opacity-80"
+              >
+                terug naar lobby →
+              </button>
+            </div>
+          </div>
+        </MobileContainer>
+      )
+    }
+
     return (
       <MobileContainer>
         <div className="flex-1 flex items-center justify-center">

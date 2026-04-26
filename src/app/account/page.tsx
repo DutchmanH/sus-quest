@@ -8,23 +8,37 @@ import { Avatar } from '@/components/ui/Avatar'
 import { useGameStore } from '@/store/gameStore'
 import { AVATAR_COLORS } from '@/types'
 
+const AVATAR_PRESETS = [
+  { icon: '🕵️' },
+  { icon: '🦝' },
+  { icon: '🧃' },
+  { icon: '🛸' },
+  { icon: '🐸' },
+  { icon: '🫥' },
+  { icon: '😈' },
+  { icon: '🤖' },
+  { icon: '👻' },
+  { icon: '🐙' },
+  { icon: '🦊' },
+  { icon: '🐼' },
+] as const
+
 export default function AccountPage() {
   const router = useRouter()
   const { language, setLanguage } = useGameStore()
 
   const [username, setUsername] = useState('')
   const [avatarColor, setAvatarColor] = useState(AVATAR_COLORS[0])
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+  const [avatarIcon, setAvatarIcon] = useState<string>('🕵️')
+  const [theme, setTheme] = useState<'dark' | 'light'>(() =>
+    typeof window !== 'undefined' && localStorage.getItem('susquest-theme') === 'light' ? 'light' : 'dark'
+  )
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
-    // Load current theme from localStorage
-    const stored = localStorage.getItem('susquest-theme')
-    setTheme(stored === 'light' ? 'light' : 'dark')
-
     // Load profile
     fetch('/api/sessions')
       .then(r => r.json())
@@ -35,6 +49,9 @@ export default function AccountPage() {
         }
       })
       .finally(() => setLoading(false))
+
+    const storedIcon = localStorage.getItem('susquest-avatar-icon')
+    if (storedIcon) setAvatarIcon(storedIcon)
   }, [])
 
   function applyTheme(t: 'dark' | 'light') {
@@ -56,13 +73,14 @@ export default function AccountPage() {
     const res = await fetch('/api/account', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: username.trim(), avatar_color: avatarColor }),
+      body: JSON.stringify({ username: username.trim(), avatar_color: avatarColor, avatar_icon: avatarIcon }),
     })
 
     if (!res.ok) {
       const data = await res.json()
       setError(data.error ?? 'Opslaan mislukt')
     } else {
+      localStorage.setItem('susquest-avatar-icon', avatarIcon)
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     }
@@ -101,7 +119,7 @@ export default function AccountPage() {
 
         {/* Avatar preview */}
         <div className="flex items-center gap-4 mb-8">
-          <Avatar name={username || '?'} color={avatarColor} size="xl" />
+          <Avatar name={username || '?'} color={avatarColor} icon={avatarIcon} size="xl" />
           <div>
             <p className="font-bold text-lg text-[var(--text-primary)]">{username || '—'}</p>
             <p className="text-xs font-mono text-[var(--text-muted)] mt-0.5">preview</p>
@@ -143,6 +161,36 @@ export default function AccountPage() {
                 />
               ))}
             </div>
+          </div>
+
+          {/* Funny presets */}
+          <div>
+            <label className="text-xs font-mono tracking-widest text-[var(--text-muted)] mb-3 block uppercase">
+              Avatar kiezen
+            </label>
+            <div className="grid grid-cols-6 gap-3">
+              {AVATAR_PRESETS.map((preset) => (
+                <button
+                  key={preset.icon}
+                  onClick={() => {
+                    setAvatarIcon(preset.icon)
+                    setSaved(false)
+                  }}
+                  className="w-12 h-12 rounded-full flex items-center justify-center transition-all border"
+                  style={{
+                    background: 'var(--mint)',
+                    borderColor: avatarIcon === preset.icon ? 'var(--text-primary)' : 'var(--mint)',
+                    boxShadow: avatarIcon === preset.icon ? '0 0 0 2px var(--bg-primary), 0 0 0 4px var(--mint)' : 'none',
+                  }}
+                  aria-label={`Avatar ${preset.icon}`}
+                >
+                  <span className="text-xl text-[var(--bg-primary)]">{preset.icon}</span>
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-[var(--text-muted)] mt-2">
+              Kies een avatar-icoon. Naam blijft los daarvan instelbaar.
+            </p>
           </div>
 
           {/* Language */}
