@@ -22,6 +22,7 @@ export default function RevealPage({ params }: RevealPageProps) {
   const [accusations, setAccusations] = useState<Accusation[]>([])
   const [movingNextRound, setMovingNextRound] = useState(false)
   const [nextRoundError, setNextRoundError] = useState<string | null>(null)
+  const [isAuthHost, setIsAuthHost] = useState(false)
 
   useEffect(() => {
     if (room?.status === 'lobby') {
@@ -39,58 +40,44 @@ export default function RevealPage({ params }: RevealPageProps) {
       .then(({ data }) => setAccusations((data ?? []) as Accusation[]))
   }, [currentRound])
 
+  useEffect(() => {
+    if (!room) return
+    const supabase = createClient()
+    let cancelled = false
+    supabase.auth.getUser().then(({ data }) => {
+      if (cancelled) return
+      setIsAuthHost((data.user?.id ?? null) === room.host_id)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [room?.id, room?.host_id])
+
   const me = players.find(p => p.id === playerId)
-  const isHost = me?.is_host ?? false
+  const isHost = (me?.is_host ?? false) || isAuthHost
 
   async function nextRound() {
     if (!room || !currentRound || !isHost || movingNextRound) return
     setMovingNextRound(true)
     setNextRoundError(null)
-    const supabase = createClient()
-
-    const nextRoundNum = room.current_round + 1
-
-    if (nextRoundNum > room.rounds_total) {
-      // Game over: mark round done and room finished in parallel
-      const [roundDoneResult, roomFinishedResult] = await Promise.all([
-        supabase.from('rounds').update({ status: 'done' }).eq('id', currentRound.id),
-        supabase.from('rooms').update({ status: 'finished' }).eq('id', room.id),
-      ])
-      if (roundDoneResult.error || roomFinishedResult.error) {
-        setNextRoundError('Ronde afronden mislukt')
+    try {
+      const res = await fetch(`/api/rooms/${code}/advance`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setNextRoundError(data.error ?? 'Volgende ronde starten mislukt')
         setMovingNextRound(false)
         return
       }
-      router.push(`/game/${code}/end`)
-      return
-    }
-
-    // Fetch next round and mark current done in parallel
-    const [currentRoundDoneResult, { data: nextRoundRow, error: nextRoundFetchError }] = await Promise.all([
-      supabase.from('rounds').update({ status: 'done' }).eq('id', currentRound.id),
-      supabase.from('rounds').select('id').eq('room_id', room.id).eq('round_number', nextRoundNum).single(),
-    ])
-    if (currentRoundDoneResult.error || nextRoundFetchError) {
-      setNextRoundError('Volgende ronde ophalen mislukt')
       setMovingNextRound(false)
-      return
-    }
-
-    if (nextRoundRow) {
-      // Activate next round and update room counter in parallel
-      const [activateResult, roomRoundResult] = await Promise.all([
-        supabase.from('rounds').update({ status: 'active' }).eq('id', nextRoundRow.id),
-        supabase.from('rooms').update({ current_round: nextRoundNum }).eq('id', room.id),
-      ])
-      if (activateResult.error || roomRoundResult.error) {
-        setNextRoundError('Volgende ronde starten mislukt')
-        setMovingNextRound(false)
+      if (data.finished) {
+        router.push(`/game/${code}/end`)
         return
       }
+      router.push(`/game/${code}`)
+    } catch {
+      setNextRoundError('Volgende ronde starten mislukt')
+      setMovingNextRound(false)
     }
-
-    setMovingNextRound(false)
-    router.push(`/game/${code}`)
   }
 
   if (loading || !currentRound || !room) {
@@ -110,9 +97,12 @@ export default function RevealPage({ params }: RevealPageProps) {
     <MobileContainer>
       <div className="flex flex-col min-h-screen px-5 pt-5">
         {/* Header */}
-        <div className="mb-6">
+        <div className="mb-6 flex items-center justify-between gap-3">
           <span className="px-3 py-1 rounded-full text-xs font-mono tracking-widest border border-[var(--border)] text-[var(--text-muted)]">
             RONDE {room.current_round} · REVEAL
+          </span>
+          <span className="text-[10px] font-mono tracking-widest text-[var(--text-muted)] uppercase">
+            {isHost ? 'host' : 'guest'}
           </span>
         </div>
 

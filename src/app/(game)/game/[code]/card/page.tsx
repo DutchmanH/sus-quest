@@ -39,15 +39,10 @@ export default function CardPage({ params }: CardPageProps) {
       const fakeTaskText = language === 'en'
         ? (round.fake_task_en || 'Stay sharp and trust no one.')
         : (round.fake_task_nl || 'Blijf scherp en vertrouw niemand.')
-      const noSidequestText = language === 'en'
-        ? 'No sidequest this round. Keep a poker face anyway.'
-        : 'Geen sidequest deze ronde. Houd alsnog je pokerface.'
 
       const text = isSus
         ? sidequestText
-        : hasSidequest
-          ? fakeTaskText
-          : noSidequestText
+        : fakeTaskText
 
       setCardData({ isSus, hasSidequest, text })
       setCardLoading(false)

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { isRoomExpired } from '@/lib/game-expiry'
 import { generateRounds } from '@/lib/openai'
+import { resolveSeasonalContext } from '@/lib/seasonal-events'
 
 const SIDEQUEST_CHANCE = 0.7
 
@@ -34,15 +35,17 @@ export async function POST(request: NextRequest) {
 
     // Delete existing rounds so the host can regenerate freely
     await supabase.from('rounds').delete().eq('room_id', room.id)
-    await supabase.from('rooms').update({ status: 'generating', last_activity_at: new Date().toISOString() }).eq('id', room.id)
+    await supabase.from('rooms').update({ status: 'generating' }).eq('id', room.id)
 
     // Player count is unknown at generation time; use 4 as a sensible default
+    // for the AI prompt context. Actual player assignment happens at game start.
     const generatedRounds = await generateRounds(
       room.rounds_total,
       room.vibe,
       room.content_level,
       4,
-      room.groep
+      room.groep,
+      resolveSeasonalContext({ manualTheme: room.seasonal_theme ?? null })
     )
 
     if (!Array.isArray(generatedRounds) || generatedRounds.length === 0) {
@@ -52,24 +55,26 @@ export async function POST(request: NextRequest) {
     const roundsToInsert = generatedRounds.map((round, index) => {
       const hasSidequest = Math.random() < SIDEQUEST_CHANCE
       return {
-        room_id: room.id,
-        round_number: index + 1,
-        main_question_nl: round.mainQuestion?.nl ?? 'Vraag',
-        main_question_en: round.mainQuestion?.en ?? 'Question',
-        has_sidequest: hasSidequest,
-        sidequest_player_id: null,
-        sidequest_nl: hasSidequest ? (round.sidequest?.text?.nl ?? 'Doe iets verdachts maar subtiel.') : null,
-        sidequest_en: hasSidequest ? (round.sidequest?.text?.en ?? 'Do something suspicious, but subtle.') : null,
-        fake_task_nl: round.fakeTask?.nl ?? 'Doe niets opvallends.',
-        fake_task_en: round.fakeTask?.en ?? 'Do nothing suspicious.',
-        status: 'pending',
+      room_id: room.id,
+      round_number: index + 1,
+      main_question_nl: round.mainQuestion?.nl ?? 'Vraag',
+      main_question_en: round.mainQuestion?.en ?? 'Question',
+      // Product rule: per round independently 70% chance on sidequest.
+      // Only one player can get the sidequest later via sidequest_player_id.
+      has_sidequest: hasSidequest,
+      sidequest_player_id: null, // assigned when game actually starts
+      sidequest_nl: hasSidequest ? (round.sidequest?.text?.nl ?? 'Doe iets verdachts maar subtiel.') : null,
+      sidequest_en: hasSidequest ? (round.sidequest?.text?.en ?? 'Do something suspicious, but subtle.') : null,
+      fake_task_nl: round.fakeTask?.nl ?? 'Doe niets opvallends.',
+      fake_task_en: round.fakeTask?.en ?? 'Do nothing suspicious.',
+      status: 'pending',
       }
     })
 
     const { error: insertError } = await supabase.from('rounds').insert(roundsToInsert)
     if (insertError) throw insertError
 
-    // Back to lobby — trigger on rounds already updated last_activity_at
+    // Back to lobby — players will join after the host approves the preview
     await supabase.from('rooms').update({ status: 'lobby' }).eq('id', room.id)
 
     return NextResponse.json({ success: true, roundCount: roundsToInsert.length })

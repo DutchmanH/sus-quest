@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { DEFAULT_ICON } from '@/lib/avatars'
 import { generateFunnyGameName } from '@/lib/funny-game-name'
 import { useGameStore } from '@/store/gameStore'
-import type { Setting, Groep, Boldness } from '@/types'
+import type { Setting, Groep, Boldness, SeasonalTheme } from '@/types'
 
 const SETTINGS: { value: Setting; emoji: string; label: string; sub: string }[] = [
   { value: 'bank',           emoji: '🛋️', label: 'Op de bank',    sub: 'thuis, ontspannen, lekker lui' },
@@ -29,8 +29,16 @@ const BOLDNESS_OPTIONS: { value: Boldness; emoji: string; label: string; sub: st
   { value: 'niemand_veilig', emoji: '🔥', label: 'Niemand is veilig',    sub: 'volledig ongecensureerd — jullie zijn gewaarschuwd', color: 'var(--coral)' },
 ]
 
-const STEP_LABELS = ['MODE', 'LOCATIE', 'GROEP', 'INTENSITEIT', 'RONDES', 'GAME NAAM']
-const TOTAL_STEPS = 6
+const SEASONAL_THEME_OPTIONS: { value: SeasonalTheme; emoji: string; label: string; sub: string }[] = [
+  { value: 'koningsdag', emoji: '🧡', label: 'Koningsdag', sub: 'oranje chaos en feestvibes' },
+  { value: 'sinterklaas', emoji: '🎁', label: 'Sinterklaas', sub: 'surprises en ondeugende hints' },
+  { value: 'kerst', emoji: '🎄', label: 'Kerst', sub: 'gezellig, scherp en familieproof-ish' },
+  { value: 'oud_en_nieuw', emoji: '🎆', label: 'Oud & Nieuw', sub: 'resoluties, vuurwerk en chaos' },
+  { value: 'carnaval', emoji: '🎭', label: 'Carnaval', sub: 'verkleed, uitbundig, beetje fout' },
+]
+
+const STEP_LABELS = ['MODE', 'LOCATIE', 'GROEP', 'INTENSITEIT', 'THEMA', 'RONDES', 'GAME NAAM']
+const TOTAL_STEPS = 7
 
 export function CreatePartyPage() {
   const router = useRouter()
@@ -41,6 +49,7 @@ export function CreatePartyPage() {
   const [setting, setSetting] = useState<Setting>('feest')
   const [groep, setGroep]     = useState<Groep>('vrienden')
   const [boldness, setBoldness] = useState<Boldness>('blozen')
+  const [seasonalTheme, setSeasonalTheme] = useState<SeasonalTheme | null>(null)
   const [rounds, setRounds]   = useState<5 | 10 | 20>(10)
   const [gameName, setGameName] = useState(() => generateFunnyGameName())
 
@@ -66,6 +75,7 @@ export function CreatePartyPage() {
           vibe: setting,
           content_level: boldness,
           groep,
+          seasonal_theme: seasonalTheme,
           mode,
           game_name: gameName,
           avatar_icon: typeof window !== 'undefined'
@@ -293,8 +303,59 @@ export function CreatePartyPage() {
           </>
         )}
 
-        {/* ── Step 5: Rondes ────────────────────────────────────────────── */}
+        {/* ── Step 5: Thema ─────────────────────────────────────────────── */}
         {step === 5 && (
+          <>
+            <div className="mb-8">
+              <h1 className="text-4xl font-bold leading-tight">
+                extra <br />
+                <span className="italic text-[var(--gold)]">seizoenssmaak?</span>
+              </h1>
+            </div>
+            <div className="flex flex-col gap-3 flex-1">
+              <button
+                onClick={() => setSeasonalTheme(null)}
+                className={`flex items-center gap-5 p-5 rounded-3xl border text-left transition-all ${
+                  seasonalTheme === null
+                    ? 'border-[var(--mint)] bg-[var(--mint)]/10'
+                    : 'border-[var(--border)] bg-[var(--bg-card)]'
+                }`}
+              >
+                <span className="text-4xl shrink-0">🧩</span>
+                <div className="flex-1 min-w-0">
+                  <span className={`text-lg font-bold block ${seasonalTheme === null ? 'text-[var(--mint)]' : 'text-[var(--text-primary)]'}`}>
+                    Geen vast thema
+                  </span>
+                  <span className="text-sm text-[var(--text-muted)]">Laat het model eventueel seizoensdagen detecteren.</span>
+                </div>
+                {seasonalTheme === null && <span className="text-[var(--mint)] text-lg shrink-0">✓</span>}
+              </button>
+              {SEASONAL_THEME_OPTIONS.map(theme => (
+                <button
+                  key={theme.value}
+                  onClick={() => setSeasonalTheme(theme.value)}
+                  className={`flex items-center gap-5 p-5 rounded-3xl border text-left transition-all ${
+                    seasonalTheme === theme.value
+                      ? 'border-[var(--gold)] bg-[var(--gold)]/10'
+                      : 'border-[var(--border)] bg-[var(--bg-card)]'
+                  }`}
+                >
+                  <span className="text-4xl shrink-0">{theme.emoji}</span>
+                  <div className="flex-1 min-w-0">
+                    <span className={`text-lg font-bold block ${seasonalTheme === theme.value ? 'text-[var(--gold)]' : 'text-[var(--text-primary)]'}`}>
+                      {theme.label}
+                    </span>
+                    <span className="text-sm text-[var(--text-muted)]">{theme.sub}</span>
+                  </div>
+                  {seasonalTheme === theme.value && <span className="text-[var(--gold)] text-lg shrink-0">✓</span>}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* ── Step 6: Rondes ────────────────────────────────────────────── */}
+        {step === 6 && (
           <>
             <div className="mb-8">
               <h1 className="text-4xl font-bold leading-tight">
@@ -332,8 +393,8 @@ export function CreatePartyPage() {
           </>
         )}
 
-        {/* ── Step 6: Game naam ─────────────────────────────────────────── */}
-        {step === 6 && (
+        {/* ── Step 7: Game naam ─────────────────────────────────────────── */}
+        {step === 7 && (
           <>
             <div className="mb-8">
               <h1 className="text-4xl font-bold leading-tight">

@@ -21,17 +21,20 @@ export default function GamePage({ params }: GamePageProps) {
   const [hostMenuOpen, setHostMenuOpen] = useState(false)
   const [closingGame, setClosingGame] = useState(false)
   const [returningLobby, setReturningLobby] = useState(false)
-  const [advancingPhase, setAdvancingPhase] = useState(false)
+  const [movingNextRound, setMovingNextRound] = useState(false)
   const [cardFlipped, setCardFlipped] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [isAuthHost, setIsAuthHost] = useState(false)
   const [closeError, setCloseError] = useState<string | null>(null)
+  const [nextRoundError, setNextRoundError] = useState<string | null>(null)
 
   useEffect(() => {
     const supabase = createClient()
     supabase.auth.getUser().then(({ data }) => {
       setIsLoggedIn(!!data.user)
+      setIsAuthHost((data.user?.id ?? null) === (room?.host_id ?? null))
     })
-  }, [])
+  }, [room?.host_id])
 
   useEffect(() => {
     if (room?.status === 'finished') {
@@ -108,7 +111,7 @@ export default function GamePage({ params }: GamePageProps) {
 
   const question = language === 'en' ? currentRound.main_question_en : currentRound.main_question_nl
   const me = players.find(p => p.id === playerId)
-  const isHost = me?.is_host ?? false
+  const isHost = (me?.is_host ?? false) || isAuthHost
   const myScore = me?.score ?? 0
   const susFlagCount = 0 // from accusations count
   const isSus = currentRound.sidequest_player_id === playerId
@@ -117,13 +120,9 @@ export default function GamePage({ params }: GamePageProps) {
     ? (language === 'en'
       ? (currentRound.sidequest_en ?? 'Keep it subtle. No one should notice.')
       : (currentRound.sidequest_nl ?? 'Houd het subtiel. Niemand mag het merken.'))
-    : hasSidequest
-      ? (language === 'en'
-        ? (currentRound.fake_task_en || 'Stay sharp and trust no one.')
-        : (currentRound.fake_task_nl || 'Blijf scherp en vertrouw niemand.'))
-      : (language === 'en'
-        ? 'No sidequest this round. Keep a poker face anyway.'
-        : 'Geen sidequest deze ronde. Houd alsnog je pokerface.')
+    : (language === 'en'
+      ? (currentRound.fake_task_en || 'Stay sharp and trust no one.')
+      : (currentRound.fake_task_nl || 'Blijf scherp en vertrouw niemand.'))
 
   async function closeGame() {
     if (!room || !isHost || closingGame) return
@@ -186,25 +185,31 @@ export default function GamePage({ params }: GamePageProps) {
     }
   }
 
-  async function moveToAccusePhase() {
-    if (!currentRound || !isHost || advancingPhase) return
-    setAdvancingPhase(true)
-    setCloseError(null)
+  async function moveToNextRoundDirectly() {
+    if (!room || !currentRound || !isHost || movingNextRound) return
+    setMovingNextRound(true)
+    setNextRoundError(null)
+
     try {
-      const supabase = createClient()
-      const { error } = await supabase
-        .from('rounds')
-        .update({ status: 'accuse' })
-        .eq('id', currentRound.id)
-        .eq('status', 'active')
-      if (error) {
-        setCloseError('Naar beschuldigingsfase gaan mislukt')
+      const res = await fetch(`/api/rooms/${code}/advance`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setNextRoundError(data.error ?? 'Volgende vraag starten mislukt')
+        setMovingNextRound(false)
+        return
       }
+      if (data.finished) {
+        router.push(`/game/${code}/end`)
+        return
+      }
+      router.push(`/game/${code}`)
     } catch {
-      setCloseError('Naar beschuldigingsfase gaan mislukt')
-    } finally {
-      setAdvancingPhase(false)
+      setNextRoundError('Volgende vraag starten mislukt')
+      setMovingNextRound(false)
+      return
     }
+
+    setMovingNextRound(false)
   }
 
   return (
@@ -216,6 +221,9 @@ export default function GamePage({ params }: GamePageProps) {
             RONDE {room.current_round}/{room.rounds_total}
           </span>
           <div className="flex gap-2 items-center">
+            <span className="text-[10px] font-mono tracking-widest text-[var(--text-muted)] uppercase">
+              {isHost ? 'host' : 'guest'}
+            </span>
             <span className="text-sm font-mono text-[var(--text-muted)]">★ {myScore}</span>
             <span className="text-sm font-mono text-[var(--text-muted)]">⚑ {susFlagCount}</span>
             {isHost && (
@@ -317,14 +325,22 @@ export default function GamePage({ params }: GamePageProps) {
 
         </div>
 
-        {/* Players */}
-        <div className="mt-4">
-          <p className="text-xs font-mono tracking-widest text-[var(--text-muted)] mb-3">● AT THE TABLE</p>
-          <PlayerStrip players={players} />
-        </div>
-
         {/* Action buttons */}
-        <div className="py-6">
+        <div className="pt-4 pb-6 flex flex-col gap-2">
+          {nextRoundError && (
+            <p className="text-[var(--coral)] text-xs font-mono text-center mb-2">{nextRoundError}</p>
+          )}
+          {isHost && (
+            <Button
+              variant="mint"
+              size="lg"
+              fullWidth
+              onClick={moveToNextRoundDirectly}
+              disabled={movingNextRound}
+            >
+              {movingNextRound ? 'Volgende vraag starten…' : 'Volgende vraag →'}
+            </Button>
+          )}
           <Button
             variant="dark"
             size="md"
@@ -332,22 +348,16 @@ export default function GamePage({ params }: GamePageProps) {
             className="bg-[#60A5FA] text-[var(--bg-primary)] border-none hover:opacity-90"
             onClick={() => router.push(`/game/${code}/accuse`)}
           >
-            ⚑ sus!
+            {isHost ? '⚑ Start beschuldigingsfase' : '⚑ Ik verdenk iemand'}
           </Button>
         </div>
 
-        {/* Host: advance to accuse phase */}
-        {isHost && (
-          <div className="pb-4">
-            <button
-              onClick={moveToAccusePhase}
-              disabled={advancingPhase}
-              className="w-full text-center text-xs font-mono tracking-widest text-[var(--text-muted)] hover:text-[var(--coral)] py-2 disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {advancingPhase ? 'Fase starten…' : '→ Start beschuldigingsfase'}
-            </button>
-          </div>
-        )}
+        {/* Players */}
+        <div className="mt-2">
+          <p className="text-xs font-mono tracking-widest text-[var(--text-muted)] mb-3">● AT THE TABLE</p>
+          <PlayerStrip players={players} />
+        </div>
+
       </div>
     </MobileContainer>
   )

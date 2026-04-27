@@ -1,5 +1,5 @@
 import OpenAI from 'openai'
-import type { GeneratedRound } from '@/types'
+import type { GeneratedRound, SeasonalPromptContext } from '@/types'
 
 function getOpenAI() {
   const apiKey = process.env.OPENAI_API_KEY
@@ -32,25 +32,72 @@ export async function generateRounds(
   setting: string,
   boldness: string,
   playerCount: number,
-  groep?: string
+  groep?: string,
+  seasonalContext?: SeasonalPromptContext | null
 ): Promise<GeneratedRound[]> {
   const settingCtx = SETTING_CONTEXT[setting] ?? SETTING_CONTEXT['feest']
   const groepCtx = groep ? (GROEP_CONTEXT[groep] ?? GROEP_CONTEXT['vrienden']) : GROEP_CONTEXT['vrienden']
   const boldnessCtx = BOLDNESS_CONTEXT[boldness] ?? BOLDNESS_CONTEXT['blozen']
 
-  const prompt = `Je bent de spelmeester van SusQuest — een sociaal partygame gebaseerd op wantrouwen, geheime missies en groepsgedrag.
+  const prompt = buildRoundsPrompt({
+    roundCount,
+    settingCtx,
+    groepCtx,
+    boldnessCtx,
+    playerCount,
+    seasonalContext,
+  })
 
-Genereer precies ${roundCount} speelrondes.
+  const openai = getOpenAI()
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [{ role: 'user', content: prompt }],
+    temperature: 0.9,
+    response_format: { type: 'json_object' },
+  })
+
+  const raw = completion.choices[0].message.content ?? '{}'
+
+  let parsed: { rounds: GeneratedRound[] }
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    throw new Error('OpenAI returned invalid JSON')
+  }
+
+  if (!Array.isArray(parsed.rounds) || parsed.rounds.length === 0) {
+    throw new Error(`OpenAI returned invalid rounds: ${raw}`)
+  }
+
+  return parsed.rounds
+}
+
+export function buildRoundsPrompt(input: {
+  roundCount: number
+  settingCtx: string
+  groepCtx: string
+  boldnessCtx: string
+  playerCount: number
+  seasonalContext?: SeasonalPromptContext | null
+}): string {
+  const seasonalBlock = input.seasonalContext
+    ? `\nSEIZOENS-THEMA:\n- Thema: ${input.seasonalContext.label}\n- Bron: ${input.seasonalContext.source}\n- Instructie (NL): ${input.seasonalContext.shortInstructionNl}\n- Instructie (EN): ${input.seasonalContext.shortInstructionEn}\n- Voeg in totaal 1 of 2 seasonal rondes toe. De andere rondes blijven normaal.\n- Seasonal vragen moeten passen bij de gekozen boldness, setting en groep.\n`
+    : ''
+
+  return `Je bent de spelmeester van SusQuest — een sociaal partygame gebaseerd op wantrouwen, geheime missies en groepsgedrag.
+
+Genereer precies ${input.roundCount} speelrondes.
 
 CONTEXT OVER DEZE GROEP:
-- Locatie: ${settingCtx}
-- Groep: ${groepCtx}
-- ${boldnessCtx}
-- Aantal spelers: ${playerCount}
+- Locatie: ${input.settingCtx}
+- Groep: ${input.groepCtx}
+- ${input.boldnessCtx}
+- Aantal spelers: ${input.playerCount}
+${seasonalBlock}
 
 SPELREGELS:
 - Ongeveer 60-70% van de rondes heeft een echte sidequest (hasSidequest: true)
-- Bij een sidequest: playerIndex is een getal van 0 tot ${playerCount - 1}
+- Bij een sidequest: playerIndex is een getal van 0 tot ${input.playerCount - 1}
 - Opdrachten zijn KORT en DIRECT — max 2 zinnen, geen uitleg, geen als/dan constructies
 - mainQuestion stelt een vraag aan de hele groep: over gedrag, keuzes, persoonlijkheid of sociale dynamiek. De vraag moet iets onthullen over wie iemand echt is.
 - sidequest is een geheime persoonlijke opdracht voor ÉÉN speler. Die speler moet dit ongemerkt uitvoeren tijdens het beantwoorden van de hoofdvraag. Subtiel of afleidend, maar uitvoerbaar.
@@ -75,27 +122,4 @@ Antwoord als JSON object met een "rounds" array, geen uitleg, geen markdown:
 }
 
 Bij hasSidequest: false, laat het sidequest veld volledig weg.`
-
-  const openai = getOpenAI()
-  const completion = await openai.chat.completions.create({
-    model: 'gpt-4o',
-    messages: [{ role: 'user', content: prompt }],
-    temperature: 0.9,
-    response_format: { type: 'json_object' },
-  })
-
-  const raw = completion.choices[0].message.content ?? '{}'
-
-  let parsed: { rounds: GeneratedRound[] }
-  try {
-    parsed = JSON.parse(raw)
-  } catch {
-    throw new Error('OpenAI returned invalid JSON')
-  }
-
-  if (!Array.isArray(parsed.rounds) || parsed.rounds.length === 0) {
-    throw new Error(`OpenAI returned invalid rounds: ${raw}`)
-  }
-
-  return parsed.rounds
 }

@@ -30,7 +30,7 @@ export function SidequestCard({ isSus, hasSidequest, text, missionNumber, onClos
     ? 'lees snel — sluit af — act normal.'
     : hasSidequest
       ? 'iemand speelt niet eerlijk. zoek wie.'
-      : 'ook zonder sidequest heeft iedereen een kaart.'
+      : 'blijf scherp. iedereen kan verdacht zijn.'
 
   return (
     <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(0,0,0,0.85)' }}>

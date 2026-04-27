@@ -446,16 +446,13 @@ export default function LobbyPage({ params }: LobbyPageProps) {
               )}
             </div>
           ))}
-          {!everyoneReady && Array.from({ length: Math.max(0, 4 - players.length) }).map((_, idx) => (
-            <div
-              key={`placeholder-${idx}`}
-              className="bg-[var(--bg-card)] border border-dashed border-[var(--border)] rounded-2xl px-4 py-3 animate-pulse"
-            >
+          {!everyoneReady && (
+            <div className="bg-[var(--bg-card)] border border-dashed border-[var(--border)] rounded-2xl px-4 py-3 animate-pulse">
               <p className="text-xs font-mono tracking-widest text-[var(--text-muted)]">
                 wacht op spelers{'.'.repeat(waitingDots)}
               </p>
             </div>
-          ))}
+          )}
           <p className="text-[10px] font-mono text-[var(--text-muted)] opacity-50 mt-1 text-center">
             tik op je naam om aan te passen
           </p>

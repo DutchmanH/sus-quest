@@ -8,6 +8,14 @@ export type ContentLevel = 'safe' | 'spicy' | 'extra_spicy'
 export type Setting = 'bank' | 'feest' | 'after_midnight' | 'onderweg'
 export type Groep = 'vrienden' | 'vreemden' | 'stelletjes' | 'familie'
 export type Boldness = 'gezellig' | 'blozen' | 'niemand_veilig'
+export type SeasonalTheme =
+  | 'koningsdag'
+  | 'sinterklaas'
+  | 'kerst'
+  | 'oud_en_nieuw'
+  | 'carnaval'
+  | 'custom'
+export type SeasonalSource = 'manual' | 'calendar' | 'none'
 
 export interface Profile {
   id: string
@@ -34,6 +42,8 @@ export interface Room {
   vibe: string
   content_level: string
   groep: string
+  seasonal_theme?: SeasonalTheme | null
+  seasonal_source?: SeasonalSource | null
   language: string
   created_at: string
   last_activity_at: string
@@ -86,6 +96,14 @@ export interface GeneratedRound {
     text: { nl: string; en: string }
   }
   fakeTask: { nl: string; en: string }
+}
+
+export interface SeasonalPromptContext {
+  key: SeasonalTheme
+  source: SeasonalSource
+  label: string
+  shortInstructionNl: string
+  shortInstructionEn: string
 }
 
 export const AVATAR_COLORS = [

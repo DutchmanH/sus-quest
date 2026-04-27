@@ -1,6 +1,6 @@
 'use client'
 
-import { use, useState, useEffect } from 'react'
+import { use, useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { MobileContainer } from '@/components/layout/MobileContainer'
 import { Button } from '@/components/ui/Button'
@@ -14,6 +14,8 @@ interface AccusePageProps {
   params: Promise<{ code: string }>
 }
 
+const ACCUSE_TIMER_SECONDS = 15
+
 export default function AccusePage({ params }: AccusePageProps) {
   const { code } = use(params)
   const router = useRouter()
@@ -23,6 +25,10 @@ export default function AccusePage({ params }: AccusePageProps) {
   const [submitted, setSubmitted] = useState(false)
   const [resolvingRound, setResolvingRound] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [loadingExistingAccusation, setLoadingExistingAccusation] = useState(false)
+  const [secondsLeft, setSecondsLeft] = useState(ACCUSE_TIMER_SECONDS)
+  const [isAuthHost, setIsAuthHost] = useState(false)
+  const timerTriggeredRef = useRef(false)
 
   useEffect(() => {
     if (room?.status === 'lobby') {
@@ -32,6 +38,63 @@ export default function AccusePage({ params }: AccusePageProps) {
       router.push(`/game/${code}/reveal`)
     }
   }, [room?.status, currentRound?.status, code, router])
+
+  useEffect(() => {
+    if (!currentRound || !playerId) return
+
+    const round = currentRound
+    let cancelled = false
+    const supabase = createClient()
+
+    async function loadExistingAccusation() {
+      setLoadingExistingAccusation(true)
+      const { data, error } = await supabase
+        .from('accusations')
+        .select('accused_player_id')
+        .eq('round_id', round.id)
+        .eq('accuser_player_id', playerId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (cancelled) return
+
+      if (error) {
+        setActionError('Eerdere beschuldiging ophalen mislukt')
+        setLoadingExistingAccusation(false)
+        return
+      }
+
+      if (data?.accused_player_id) {
+        setSelected(data.accused_player_id)
+        setSubmitted(true)
+      } else {
+        setSelected(null)
+        setSubmitted(false)
+      }
+
+      setLoadingExistingAccusation(false)
+    }
+
+    void loadExistingAccusation()
+
+    return () => {
+      cancelled = true
+    }
+  }, [currentRound?.id, playerId])
+
+  useEffect(() => {
+    if (!room) return
+    const supabase = createClient()
+    let cancelled = false
+    supabase.auth.getUser().then(({ data }) => {
+      if (cancelled) return
+      setIsAuthHost((data.user?.id ?? null) === room.host_id)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [room?.id, room?.host_id])
 
   async function handleAccuse() {
     if (!selected || !currentRound || !playerId || submitted) return
@@ -51,10 +114,10 @@ export default function AccusePage({ params }: AccusePageProps) {
   }
 
   const me = players.find(p => p.id === playerId)
-  const isHost = me?.is_host ?? false
+  const isHost = (me?.is_host ?? false) || isAuthHost
   const otherPlayers = players.filter(p => p.id !== playerId)
 
-  async function moveToReveal() {
+  const moveToReveal = useCallback(async () => {
     if (!currentRound || !isHost || resolvingRound) return
     setResolvingRound(true)
     setActionError(null)
@@ -114,9 +177,31 @@ export default function AccusePage({ params }: AccusePageProps) {
       return
     }
     setResolvingRound(false)
-  }
+  }, [currentRound, isHost, resolvingRound])
 
-  if (loading || !currentRound) {
+  useEffect(() => {
+    // Timer reset when round changes — intentional sync with external round state
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSecondsLeft(ACCUSE_TIMER_SECONDS)
+    timerTriggeredRef.current = false
+  }, [currentRound?.id])
+
+  useEffect(() => {
+    if (!currentRound || currentRound.status !== 'accuse') return
+    const intervalId = setInterval(() => {
+      setSecondsLeft(prev => (prev <= 0 ? 0 : prev - 1))
+    }, 1000)
+    return () => clearInterval(intervalId)
+  }, [currentRound?.id, currentRound?.status])
+
+  useEffect(() => {
+    if (!isHost || !currentRound || currentRound.status !== 'accuse') return
+    if (secondsLeft > 0 || timerTriggeredRef.current) return
+    timerTriggeredRef.current = true
+    void moveToReveal()
+  }, [secondsLeft, isHost, currentRound, moveToReveal])
+
+  if (loading || !currentRound || loadingExistingAccusation) {
     return (
       <MobileContainer>
         <div className="flex-1 flex items-center justify-center">
@@ -130,9 +215,12 @@ export default function AccusePage({ params }: AccusePageProps) {
     <MobileContainer>
       <div className="flex flex-col min-h-screen px-5 pt-5">
         {/* Header */}
-        <div className="mb-6">
+        <div className="mb-6 flex items-center justify-between gap-3">
           <span className="px-3 py-1 rounded-full text-xs font-mono tracking-widest border border-[var(--coral)] text-[var(--coral)]">
             ⚑ ACCUSE · KIES 1
+          </span>
+          <span className="text-[10px] font-mono tracking-widest text-[var(--text-muted)] uppercase">
+            {isHost ? 'host' : 'guest'}
           </span>
         </div>
 
@@ -144,6 +232,9 @@ export default function AccusePage({ params }: AccusePageProps) {
           </h1>
           <p className="text-sm text-[var(--text-muted)] mt-2">
             fout? jij drinkt. geen druk 💅
+          </p>
+          <p className="text-xs font-mono tracking-widest text-[var(--coral)] mt-2">
+            Let op: fout verdenken = -1 punt.
           </p>
         </div>
 
@@ -164,6 +255,9 @@ export default function AccusePage({ params }: AccusePageProps) {
 
         {/* CTAs */}
         <div className="py-6 flex flex-col gap-3">
+          <p className="text-center text-xs font-mono tracking-widest text-[var(--text-muted)]">
+            Reveal over {secondsLeft}s
+          </p>
           {!submitted && (
             <Button
               variant="ghost"
@@ -189,7 +283,7 @@ export default function AccusePage({ params }: AccusePageProps) {
             </Button>
           ) : (
             <div className="text-center py-3 text-[var(--text-muted)] text-sm font-mono">
-              ✓ beschuldiging ingediend — wacht op anderen
+              ✓ beschuldiging ingediend — keuze is opgeslagen voor de host-fase
             </div>
           )}
 

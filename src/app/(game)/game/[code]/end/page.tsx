@@ -36,15 +36,15 @@ export default function EndPage({ params }: EndPageProps) {
         {/* Header */}
         <div className="mb-6">
           <span className="px-3 py-1 rounded-full text-xs font-mono tracking-widest border border-[var(--gold)] text-[var(--gold)]">
-            RONDE {room.rounds_total}/{room.rounds_total} · FIN
+            SPEL KLAAR · EINDSTAND
           </span>
         </div>
 
         {/* Title */}
         <div className="mb-6">
           <h1 className="text-5xl font-bold leading-tight">
-            the sus<br />
-            <span className="italic text-[var(--mint)]">has won.</span>
+            eindstand<br />
+            <span className="italic text-[var(--mint)]">van vanavond.</span>
           </h1>
         </div>
 
