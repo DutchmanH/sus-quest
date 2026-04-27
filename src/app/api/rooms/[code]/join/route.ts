@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { getLatestActivityTimestamp, isGameExpired, isSessionExpired } from '@/lib/game-expiry'
+import { isRoomExpired } from '@/lib/game-expiry'
 import { AVATAR_COLORS } from '@/types'
 
 export async function POST(
@@ -17,7 +17,6 @@ export async function POST(
 
     const supabase = await createServiceClient()
 
-    // Find room
     const { data: room, error: roomError } = await supabase
       .from('rooms')
       .select('*')
@@ -28,25 +27,7 @@ export async function POST(
       return NextResponse.json({ error: 'Room niet gevonden' }, { status: 404 })
     }
 
-    const { data: latestPlayer } = await supabase
-      .from('room_players')
-      .select('joined_at')
-      .eq('room_id', room.id)
-      .order('joined_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    const { data: latestRound } = await supabase
-      .from('rounds')
-      .select('created_at')
-      .eq('room_id', room.id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    const latestActivityAt = getLatestActivityTimestamp(room.created_at, latestPlayer?.joined_at, latestRound?.created_at)
-    const isExpired = isSessionExpired(room.created_at) || isGameExpired(latestActivityAt)
-
-    if (isExpired) {
+    if (isRoomExpired(room)) {
       await supabase.from('rooms').update({ status: 'finished' }).eq('id', room.id)
       return NextResponse.json(
         { error: 'Deze game is verlopen. Laat de host een nieuwe game starten.', code: 'GAME_EXPIRED' },
@@ -58,15 +39,10 @@ export async function POST(
       return NextResponse.json({ error: 'Game is al gestart' }, { status: 400 })
     }
 
-    // Use chosen color, or fall back to sequential assignment
     const avatarColor = (AVATAR_COLORS as readonly string[]).includes(requestedColor)
       ? requestedColor
-      : (() => {
-          // count existing to assign sequentially
-          return AVATAR_COLORS[0]
-        })()
+      : AVATAR_COLORS[0]
 
-    // Check if user is logged in
     const { data: { user } } = await supabase.auth.getUser()
 
     const { data: player, error: playerError } = await supabase
@@ -85,6 +61,7 @@ export async function POST(
 
     if (playerError) throw playerError
 
+    // Trigger on room_players handles last_activity_at update
     return NextResponse.json({ room, player })
   } catch (err) {
     console.error('Join room error:', err)

@@ -20,6 +20,14 @@ export default function RevealPage({ params }: RevealPageProps) {
   const { playerId, language } = useGameStore()
   const { room, players, currentRound, loading } = useRoom(code)
   const [accusations, setAccusations] = useState<Accusation[]>([])
+  const [movingNextRound, setMovingNextRound] = useState(false)
+  const [nextRoundError, setNextRoundError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (room?.status === 'lobby') {
+      router.push(`/lobby/${code}`)
+    }
+  }, [room?.status, code, router])
 
   useEffect(() => {
     if (!currentRound) return
@@ -35,35 +43,53 @@ export default function RevealPage({ params }: RevealPageProps) {
   const isHost = me?.is_host ?? false
 
   async function nextRound() {
-    if (!room || !currentRound || !isHost) return
+    if (!room || !currentRound || !isHost || movingNextRound) return
+    setMovingNextRound(true)
+    setNextRoundError(null)
     const supabase = createClient()
 
     const nextRoundNum = room.current_round + 1
 
     if (nextRoundNum > room.rounds_total) {
       // Game over: mark round done and room finished in parallel
-      await Promise.all([
+      const [roundDoneResult, roomFinishedResult] = await Promise.all([
         supabase.from('rounds').update({ status: 'done' }).eq('id', currentRound.id),
         supabase.from('rooms').update({ status: 'finished' }).eq('id', room.id),
       ])
+      if (roundDoneResult.error || roomFinishedResult.error) {
+        setNextRoundError('Ronde afronden mislukt')
+        setMovingNextRound(false)
+        return
+      }
       router.push(`/game/${code}/end`)
       return
     }
 
     // Fetch next round and mark current done in parallel
-    const [, { data: nextRoundRow }] = await Promise.all([
+    const [currentRoundDoneResult, { data: nextRoundRow, error: nextRoundFetchError }] = await Promise.all([
       supabase.from('rounds').update({ status: 'done' }).eq('id', currentRound.id),
       supabase.from('rounds').select('id').eq('room_id', room.id).eq('round_number', nextRoundNum).single(),
     ])
+    if (currentRoundDoneResult.error || nextRoundFetchError) {
+      setNextRoundError('Volgende ronde ophalen mislukt')
+      setMovingNextRound(false)
+      return
+    }
 
     if (nextRoundRow) {
       // Activate next round and update room counter in parallel
-      await Promise.all([
+      const [activateResult, roomRoundResult] = await Promise.all([
         supabase.from('rounds').update({ status: 'active' }).eq('id', nextRoundRow.id),
         supabase.from('rooms').update({ current_round: nextRoundNum }).eq('id', room.id),
       ])
+      if (activateResult.error || roomRoundResult.error) {
+        setNextRoundError('Volgende ronde starten mislukt')
+        setMovingNextRound(false)
+        return
+      }
     }
 
+    setMovingNextRound(false)
     router.push(`/game/${code}`)
   }
 
@@ -155,9 +181,12 @@ export default function RevealPage({ params }: RevealPageProps) {
 
         {/* CTA */}
         <div className="py-6">
+          {nextRoundError && (
+            <p className="text-center text-[var(--coral)] text-sm mb-3">{nextRoundError}</p>
+          )}
           {isHost ? (
-            <Button variant="mint" fullWidth size="lg" onClick={nextRound}>
-              Volgende →
+            <Button variant="mint" fullWidth size="lg" onClick={nextRound} disabled={movingNextRound}>
+              {movingNextRound ? 'Volgende starten…' : 'Volgende →'}
             </Button>
           ) : (
             <p className="text-center text-[var(--text-muted)] text-sm font-mono">

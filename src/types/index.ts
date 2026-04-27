@@ -32,6 +32,7 @@ export interface Room {
   groep: string
   language: string
   created_at: string
+  last_activity_at: string
 }
 
 export interface RoomPlayer {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { getLatestActivityTimestamp, isGameExpired, isSessionExpired } from '@/lib/game-expiry'
+import { isRoomExpired } from '@/lib/game-expiry'
 
 export async function POST(
   _request: NextRequest,
@@ -20,24 +20,7 @@ export async function POST(
   if (roomError || !room) return NextResponse.json({ error: 'Room niet gevonden' }, { status: 404 })
   if (room.host_id !== user.id) return NextResponse.json({ error: 'Alleen de host kan het spel starten' }, { status: 403 })
 
-  const { data: latestPlayer } = await supabase
-    .from('room_players')
-    .select('joined_at')
-    .eq('room_id', room.id)
-    .order('joined_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  const { data: latestRound } = await supabase
-    .from('rounds')
-    .select('created_at')
-    .eq('room_id', room.id)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  const latestActivityAt = getLatestActivityTimestamp(room.created_at, latestPlayer?.joined_at, latestRound?.created_at)
-  const isExpired = isSessionExpired(room.created_at) || isGameExpired(latestActivityAt)
-  if (isExpired) {
+  if (isRoomExpired(room)) {
     await supabase.from('rooms').update({ status: 'finished' }).eq('id', room.id)
     return NextResponse.json(
       { error: 'Deze game is verlopen. Start een nieuwe lobby.', code: 'GAME_EXPIRED' },
@@ -62,17 +45,27 @@ export async function POST(
   }
 
   const playerIds = players.map(p => p.id)
-  const sidequestRounds = rounds.filter(r => r.has_sidequest)
+  const sidequestAssignments = rounds.map(round => ({
+    id: round.id,
+    sidequest_player_id: round.has_sidequest
+      ? playerIds[Math.floor(Math.random() * playerIds.length)]
+      : null,
+  }))
   const firstRound = rounds[0]
 
+  const assignmentUpdates = sidequestAssignments.map((assignment) =>
+    supabase
+      .from('rounds')
+      .update({ sidequest_player_id: assignment.sidequest_player_id })
+      .eq('id', assignment.id)
+  )
+
   await Promise.all([
-    // Assign a random player to each sidequest round
-    ...sidequestRounds.map(round => {
-      const randomPlayer = playerIds[Math.floor(Math.random() * playerIds.length)]
-      return supabase.from('rounds').update({ sidequest_player_id: randomPlayer }).eq('id', round.id)
-    }),
+    ...assignmentUpdates,
     supabase.from('rounds').update({ status: 'active' }).eq('id', firstRound.id),
-    supabase.from('rooms').update({ status: 'playing', current_round: 1 }).eq('id', room.id),
+    supabase.from('rooms')
+      .update({ status: 'playing', current_round: 1, last_activity_at: new Date().toISOString() })
+      .eq('id', room.id),
   ])
 
   return NextResponse.json({ success: true })

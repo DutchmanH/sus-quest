@@ -46,14 +46,24 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetch('/api/sessions')
-      .then(r => r.json())
+      .then(async r => {
+        if (r.status === 401) {
+          router.replace('/')
+          return null
+        }
+        return r.json()
+      })
       .then(data => {
+        if (!data) return
         setProfile(data.profile ?? null)
         setSessions(data.sessions ?? [])
+        if (!data.profile) {
+          router.replace('/account?onboarding=1')
+        }
       })
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [])
+  }, [router])
 
   async function handleLogout() {
     const supabase = createClient()

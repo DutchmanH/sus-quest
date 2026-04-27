@@ -8,6 +8,7 @@ import { PlayerRow } from '@/components/game/PlayerRow'
 import { useRoom } from '@/hooks/useRoom'
 import { useGameStore } from '@/store/gameStore'
 import { createClient } from '@/lib/supabase/client'
+import { DEFAULT_ICON } from '@/lib/avatars'
 
 interface AccusePageProps {
   params: Promise<{ code: string }>
@@ -20,23 +21,33 @@ export default function AccusePage({ params }: AccusePageProps) {
   const { room, players, currentRound, loading } = useRoom(code)
   const [selected, setSelected] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
+  const [resolvingRound, setResolvingRound] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   useEffect(() => {
+    if (room?.status === 'lobby') {
+      router.push(`/lobby/${code}`)
+    }
     if (currentRound?.status === 'reveal') {
       router.push(`/game/${code}/reveal`)
     }
-  }, [currentRound?.status, code, router])
+  }, [room?.status, currentRound?.status, code, router])
 
   async function handleAccuse() {
     if (!selected || !currentRound || !playerId || submitted) return
     setSubmitted(true)
+    setActionError(null)
     const supabase = createClient()
-    await supabase.from('accusations').insert({
+    const { error } = await supabase.from('accusations').insert({
       room_id: room!.id,
       round_id: currentRound.id,
       accuser_player_id: playerId,
       accused_player_id: selected,
     })
+    if (error) {
+      setActionError('Beschuldiging indienen mislukt')
+      setSubmitted(false)
+    }
   }
 
   const me = players.find(p => p.id === playerId)
@@ -44,19 +55,26 @@ export default function AccusePage({ params }: AccusePageProps) {
   const otherPlayers = players.filter(p => p.id !== playerId)
 
   async function moveToReveal() {
-    if (!currentRound || !isHost) return
+    if (!currentRound || !isHost || resolvingRound) return
+    setResolvingRound(true)
+    setActionError(null)
     const supabase = createClient()
 
-    const { data: accusations } = await supabase
+    const { data: accusations, error: accusationsError } = await supabase
       .from('accusations')
       .select('*')
       .eq('round_id', currentRound.id)
+    if (accusationsError) {
+      setActionError('Beschuldigingen ophalen mislukt')
+      setResolvingRound(false)
+      return
+    }
 
     const list = accusations ?? []
     const susId = currentRound.sidequest_player_id
 
     // Resolve all accusation updates + score changes in parallel
-    await Promise.all(
+    const scoreResult = await Promise.all(
       list.map((acc) => {
         const correct = acc.accused_player_id === susId
         return Promise.all([
@@ -65,16 +83,37 @@ export default function AccusePage({ params }: AccusePageProps) {
         ])
       })
     )
+    const hadScoreError = scoreResult.some(batch => batch.some(step => !!step.error))
+    if (hadScoreError) {
+      setActionError('Score verwerking mislukt')
+      setResolvingRound(false)
+      return
+    }
 
     // Sidequest player scores if not caught
     if (susId) {
       const wasCaught = list.some((a) => a.accused_player_id === susId)
       if (!wasCaught) {
-        await supabase.rpc('increment_score', { player_id: susId, delta: 1 })
+        const { error: susScoreError } = await supabase.rpc('increment_score', { player_id: susId, delta: 1 })
+        if (susScoreError) {
+          setActionError('Sidequest score verwerken mislukt')
+          setResolvingRound(false)
+          return
+        }
       }
     }
 
-    await supabase.from('rounds').update({ status: 'reveal' }).eq('id', currentRound.id)
+    const { error: roundError } = await supabase
+      .from('rounds')
+      .update({ status: 'reveal' })
+      .eq('id', currentRound.id)
+      .eq('status', 'accuse')
+    if (roundError) {
+      setActionError('Naar reveal fase gaan mislukt')
+      setResolvingRound(false)
+      return
+    }
+    setResolvingRound(false)
   }
 
   if (loading || !currentRound) {
@@ -114,8 +153,10 @@ export default function AccusePage({ params }: AccusePageProps) {
             <PlayerRow
               key={player.id}
               player={player}
+              icon={player.avatar_icon ?? DEFAULT_ICON}
               selectable={!submitted}
               selected={selected === player.id}
+              showHostTag={false}
               onSelect={() => !submitted && setSelected(player.id)}
             />
           ))}
@@ -123,6 +164,19 @@ export default function AccusePage({ params }: AccusePageProps) {
 
         {/* CTAs */}
         <div className="py-6 flex flex-col gap-3">
+          {!submitted && (
+            <Button
+              variant="ghost"
+              fullWidth
+              size="md"
+              onClick={() => router.push(`/game/${code}`)}
+            >
+              ← Terug
+            </Button>
+          )}
+          {actionError && (
+            <p className="text-[var(--coral)] text-sm text-center">{actionError}</p>
+          )}
           {!submitted ? (
             <Button
               variant="coral"
@@ -140,8 +194,8 @@ export default function AccusePage({ params }: AccusePageProps) {
           )}
 
           {isHost && (
-            <Button variant="dark" fullWidth size="md" onClick={moveToReveal}>
-              → Reveal (host only)
+            <Button variant="dark" fullWidth size="md" onClick={moveToReveal} disabled={resolvingRound}>
+              {resolvingRound ? 'Reveal starten…' : '→ Reveal (host only)'}
             </Button>
           )}
         </div>

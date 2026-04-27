@@ -53,8 +53,8 @@ SPELREGELS:
 - Bij een sidequest: playerIndex is een getal van 0 tot ${playerCount - 1}
 - Opdrachten zijn KORT en DIRECT — max 2 zinnen, geen uitleg, geen als/dan constructies
 - mainQuestion stelt een vraag aan de hele groep: over gedrag, keuzes, persoonlijkheid of sociale dynamiek. De vraag moet iets onthullen over wie iemand echt is.
-- sidequest is een geheime persoonlijke opdracht. De speler moet deze ongemerkt uitvoeren tijdens het beantwoorden. Het mag subtiel zijn of juist afleidend — maar niet onmogelijk.
-- fakeTask is een nep-opdracht die niks opvalt en de sidequest-speler dekking geeft.
+- sidequest is een geheime persoonlijke opdracht voor ÉÉN speler. Die speler moet dit ongemerkt uitvoeren tijdens het beantwoorden van de hoofdvraag. Subtiel of afleidend, maar uitvoerbaar.
+- fakeTask is wat de ANDERE spelers zien op hun kaart (als er een sidequest is). Dit is GEEN opdracht — het is een grappig, ironisch of licht uitdagend feitje of observatie dat past bij de vraag. Voorbeelden: "Wacht even... is iedereen hier eigenlijk wel te vertrouwen?", "Feit: mensen die te hard lachen zijn altijd verdacht.", "Kleine uitdaging: kijk de persoon rechts van je 3 seconden recht in de ogen." Houd het kort, grappig, en niet verdacht.
 - Toon: speels, licht sarcastisch, mysterieus — denk detective-vibe met een vleugje chaos
 - Pas de content aan op de bovenstaande context. Maak de vragen specifiek voor deze setting en groep, niet generiek.
 - Geef ALTIJD zowel Nederlandse (nl) als Engelse (en) versies

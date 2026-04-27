@@ -64,11 +64,11 @@ export default function LobbyPage({ params }: LobbyPageProps) {
   )
   const [settingsSaving, setSettingsSaving] = useState(false)
   const [settingsError, setSettingsError] = useState<string | null>(null)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [gameName, setGameName] = useState('')
   const [readySpark, setReadySpark] = useState(false)
   const [waitingDots, setWaitingDots] = useState(1)
   const [lobbyFeedback, setLobbyFeedback] = useState<{ text: string; tone: 'mint' | 'gold' } | null>(null)
-
 
   // Edit-me modal state
   const [editOpen, setEditOpen] = useState(false)
@@ -88,7 +88,7 @@ export default function LobbyPage({ params }: LobbyPageProps) {
   }, [room?.status, code, router])
 
   const me = players.find(p => p.id === playerId)
-  const myIcon = me?.avatar_icon ?? undefined
+  const myIcon = me?.avatar_icon ?? (typeof window !== 'undefined' ? (localStorage.getItem('susquest-avatar-icon') ?? DEFAULT_ICON) : DEFAULT_ICON)
   const isHost = me?.is_host ?? false
   const notReadyCount = players.filter(p => !p.is_ready).length
   const canStart = players.length >= 2 && notReadyCount === 0
@@ -98,6 +98,13 @@ export default function LobbyPage({ params }: LobbyPageProps) {
   const prevPlayerIdsRef = useRef<string[]>([])
   const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const initializedPlayersRef = useRef(false)
+
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data }) => {
+      setIsLoggedIn(!!data.user)
+    })
+  }, [])
 
   useEffect(() => {
     const wasReady = prevEveryoneReadyRef.current
@@ -242,7 +249,6 @@ export default function LobbyPage({ params }: LobbyPageProps) {
       avatar_icon: editIcon,
     }).eq('id', playerId)
     localStorage.setItem('susquest-avatar-icon', editIcon)
-    setMyIcon(editIcon)
     setEditOpen(false)
     setEditSaving(false)
   }
@@ -267,10 +273,20 @@ export default function LobbyPage({ params }: LobbyPageProps) {
           <h1 className="text-3xl font-bold leading-tight text-[var(--text-primary)]">
             deze lobby is verlopen.
           </h1>
-          <p className="text-[var(--text-muted)] text-sm">Start een nieuwe game om verder te spelen.</p>
-          <Button variant="mint" size="lg" onClick={() => router.push('/dashboard')}>
-            Naar dashboard →
-          </Button>
+          <p className="text-[var(--text-muted)] text-sm">
+            {isLoggedIn
+              ? 'Start een nieuwe game om verder te spelen.'
+              : 'Maak een account aan om je eigen game te starten.'}
+          </p>
+          {isLoggedIn ? (
+            <Button variant="mint" size="lg" onClick={() => router.push('/dashboard')}>
+              Naar dashboard →
+            </Button>
+          ) : (
+            <Button variant="mint" size="lg" onClick={() => router.push('/register')}>
+              Account aanmaken →
+            </Button>
+          )}
         </div>
       </MobileContainer>
     )
@@ -400,7 +416,7 @@ export default function LobbyPage({ params }: LobbyPageProps) {
         )}
 
         {/* Player list */}
-        <div className={`flex flex-col gap-2 flex-1 relative transition-all duration-300 ${
+        <div className={`flex flex-col gap-2 relative transition-all duration-300 ${
           everyoneReady ? 'rounded-2xl p-2 bg-[var(--mint)]/5 border border-[var(--mint)]/30 animate-pulse' : ''
         }`}>
           {readySpark && (
@@ -430,12 +446,7 @@ export default function LobbyPage({ params }: LobbyPageProps) {
               )}
             </div>
           ))}
-          {everyoneReady && (
-            <p className="text-[10px] font-mono tracking-widest text-[var(--mint)] text-center mt-1">
-              TEAM IS COMPLEET ✦ KLAAR OM TE STARTEN
-            </p>
-          )}
-          {Array.from({ length: Math.max(0, 4 - players.length) }).map((_, idx) => (
+          {!everyoneReady && Array.from({ length: Math.max(0, 4 - players.length) }).map((_, idx) => (
             <div
               key={`placeholder-${idx}`}
               className="bg-[var(--bg-card)] border border-dashed border-[var(--border)] rounded-2xl px-4 py-3 animate-pulse"
@@ -449,6 +460,11 @@ export default function LobbyPage({ params }: LobbyPageProps) {
             tik op je naam om aan te passen
           </p>
         </div>
+        {everyoneReady && (
+          <p className="text-[10px] font-mono tracking-widest text-[var(--mint)] text-center mt-2 mb-1">
+            TEAM IS COMPLEET ✦ KLAAR OM TE STARTEN · NIEUWE SPELERS KUNNEN NOG STEEDS JOINEN
+          </p>
+        )}
 
         {startError && (
           <p className="text-[var(--coral)] text-sm text-center mb-3">{startError}</p>
@@ -457,9 +473,15 @@ export default function LobbyPage({ params }: LobbyPageProps) {
         {/* CTAs */}
         <div className="py-6">
           {isHost ? (
-            <Button variant="mint" fullWidth size="lg" disabled={!canStart || starting} onClick={startGame}>
-              {!canStart ? `Wacht op ${notReadyCount} speler(s)…` : "Let's gooo 🚀"}
-            </Button>
+            me?.is_ready ? (
+              <Button variant="mint" fullWidth size="lg" disabled={!canStart || starting} onClick={startGame}>
+                {!canStart ? `Wacht op ${notReadyCount} speler(s)…` : "Let's gooo 🚀"}
+              </Button>
+            ) : (
+              <Button variant="dark" fullWidth size="lg" onClick={toggleReady}>
+                Ik ben ready (host) ✓
+              </Button>
+            )
           ) : (
             <Button
               variant={me?.is_ready ? 'dark' : 'mint'}

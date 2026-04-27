@@ -6,7 +6,6 @@ import { MobileContainer } from '@/components/layout/MobileContainer'
 import { SidequestCard } from '@/components/game/SidequestCard'
 import { useRoom } from '@/hooks/useRoom'
 import { useGameStore } from '@/store/gameStore'
-import { createClient } from '@/lib/supabase/client'
 
 interface CardPageProps {
   params: Promise<{ code: string }>
@@ -17,35 +16,38 @@ export default function CardPage({ params }: CardPageProps) {
   const router = useRouter()
   const { playerId, language } = useGameStore()
   const { room, currentRound, loading } = useRoom(code)
-  const [cardData, setCardData] = useState<{ isSus: boolean; text: string } | null>(null)
+  const [cardData, setCardData] = useState<{ isSus: boolean; hasSidequest: boolean; text: string } | null>(null)
   const [cardLoading, setCardLoading] = useState(true)
+
+  useEffect(() => {
+    if (room?.status === 'lobby') {
+      router.push(`/lobby/${code}`)
+    }
+  }, [room?.status, code, router])
 
   useEffect(() => {
     if (!currentRound || !playerId) return
 
     async function loadCard() {
-      const supabase = createClient()
-      const isSus = currentRound!.sidequest_player_id === playerId
+      const isSus = currentRound.sidequest_player_id === playerId
+      const hasSidequest = currentRound.has_sidequest
+      const sidequestText = language === 'en'
+        ? (currentRound.sidequest_en ?? 'Keep it subtle. No one should notice.')
+        : (currentRound.sidequest_nl ?? 'Houd het subtiel. Niemand mag het merken.')
+      const fakeTaskText = language === 'en'
+        ? (currentRound.fake_task_en || 'Stay sharp and trust no one.')
+        : (currentRound.fake_task_nl || 'Blijf scherp en vertrouw niemand.')
+      const noSidequestText = language === 'en'
+        ? 'No sidequest this round. Keep a poker face anyway.'
+        : 'Geen sidequest deze ronde. Houd alsnog je pokerface.'
 
-      let text: string
-      if (isSus) {
-        // Fetch the sidequest from server (should be done via a secure API route in production)
-        const { data } = await supabase
-          .from('rounds')
-          .select('sidequest_nl, sidequest_en')
-          .eq('id', currentRound!.id)
-          .single()
+      const text = isSus
+        ? sidequestText
+        : hasSidequest
+          ? fakeTaskText
+          : noSidequestText
 
-        text = language === 'en'
-          ? (data?.sidequest_en ?? 'Doe niets opvallends.')
-          : (data?.sidequest_nl ?? 'Doe niets opvallends.')
-      } else {
-        text = language === 'en'
-          ? currentRound!.fake_task_en
-          : currentRound!.fake_task_nl
-      }
-
-      setCardData({ isSus, text })
+      setCardData({ isSus, hasSidequest, text })
       setCardLoading(false)
     }
 
@@ -67,13 +69,9 @@ export default function CardPage({ params }: CardPageProps) {
       <div className="flex-1 flex items-end" style={{ background: 'rgba(0,0,0,0.85)' }}>
         <SidequestCard
           isSus={cardData.isSus}
+          hasSidequest={cardData.hasSidequest}
           text={cardData.text}
-          missionLabel="MISSIE"
           onClose={() => router.back()}
-          closeLabel="sluit kaart"
-          succeededLabel="GELUKT"
-          caughtLabel="BETRAPT"
-          readFastLabel="lees ff snel, en act normal. ze loeren."
           missionNumber={room.current_round}
         />
       </div>

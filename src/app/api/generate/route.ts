@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { getLatestActivityTimestamp, isGameExpired, isSessionExpired } from '@/lib/game-expiry'
+import { isRoomExpired } from '@/lib/game-expiry'
 import { generateRounds } from '@/lib/openai'
+
+const SIDEQUEST_CHANCE = 0.7
 
 export async function POST(request: NextRequest) {
   const authClient = await createClient()
@@ -25,32 +27,16 @@ export async function POST(request: NextRequest) {
     if (roomError || !room) return NextResponse.json({ error: 'Room niet gevonden' }, { status: 404 })
     if (room.host_id !== user.id) return NextResponse.json({ error: 'Alleen de host kan vragen genereren' }, { status: 403 })
 
-    const { data: latestPlayer } = await supabase
-      .from('room_players')
-      .select('joined_at')
-      .eq('room_id', room.id)
-      .order('joined_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    const { data: latestRound } = await supabase
-      .from('rounds')
-      .select('created_at')
-      .eq('room_id', room.id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    const latestActivityAt = getLatestActivityTimestamp(room.created_at, latestPlayer?.joined_at, latestRound?.created_at)
-    if (isSessionExpired(room.created_at) || isGameExpired(latestActivityAt)) {
+    if (isRoomExpired(room)) {
       await supabase.from('rooms').update({ status: 'finished' }).eq('id', room.id)
       return NextResponse.json({ error: 'Deze game is verlopen.', code: 'GAME_EXPIRED' }, { status: 410 })
     }
 
     // Delete existing rounds so the host can regenerate freely
     await supabase.from('rounds').delete().eq('room_id', room.id)
-    await supabase.from('rooms').update({ status: 'generating' }).eq('id', room.id)
+    await supabase.from('rooms').update({ status: 'generating', last_activity_at: new Date().toISOString() }).eq('id', room.id)
 
     // Player count is unknown at generation time; use 4 as a sensible default
-    // for the AI prompt context. Actual player assignment happens at game start.
     const generatedRounds = await generateRounds(
       room.rounds_total,
       room.vibe,
@@ -63,24 +49,27 @@ export async function POST(request: NextRequest) {
       throw new Error(`OpenAI returned invalid rounds: ${JSON.stringify(generatedRounds)}`)
     }
 
-    const roundsToInsert = generatedRounds.map((round, index) => ({
-      room_id: room.id,
-      round_number: index + 1,
-      main_question_nl: round.mainQuestion?.nl ?? 'Vraag',
-      main_question_en: round.mainQuestion?.en ?? 'Question',
-      has_sidequest: round.hasSidequest ?? false,
-      sidequest_player_id: null, // assigned when game actually starts
-      sidequest_nl: round.sidequest?.text?.nl ?? null,
-      sidequest_en: round.sidequest?.text?.en ?? null,
-      fake_task_nl: round.fakeTask?.nl ?? 'Doe niets opvallends.',
-      fake_task_en: round.fakeTask?.en ?? 'Do nothing suspicious.',
-      status: 'pending',
-    }))
+    const roundsToInsert = generatedRounds.map((round, index) => {
+      const hasSidequest = Math.random() < SIDEQUEST_CHANCE
+      return {
+        room_id: room.id,
+        round_number: index + 1,
+        main_question_nl: round.mainQuestion?.nl ?? 'Vraag',
+        main_question_en: round.mainQuestion?.en ?? 'Question',
+        has_sidequest: hasSidequest,
+        sidequest_player_id: null,
+        sidequest_nl: hasSidequest ? (round.sidequest?.text?.nl ?? 'Doe iets verdachts maar subtiel.') : null,
+        sidequest_en: hasSidequest ? (round.sidequest?.text?.en ?? 'Do something suspicious, but subtle.') : null,
+        fake_task_nl: round.fakeTask?.nl ?? 'Doe niets opvallends.',
+        fake_task_en: round.fakeTask?.en ?? 'Do nothing suspicious.',
+        status: 'pending',
+      }
+    })
 
     const { error: insertError } = await supabase.from('rounds').insert(roundsToInsert)
     if (insertError) throw insertError
 
-    // Back to lobby — players will join after the host approves the preview
+    // Back to lobby — trigger on rounds already updated last_activity_at
     await supabase.from('rooms').update({ status: 'lobby' }).eq('id', room.id)
 
     return NextResponse.json({ success: true, roundCount: roundsToInsert.length })

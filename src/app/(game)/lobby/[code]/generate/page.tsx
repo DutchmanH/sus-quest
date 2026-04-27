@@ -6,6 +6,7 @@ import { MobileContainer } from '@/components/layout/MobileContainer'
 import { Button } from '@/components/ui/Button'
 import { GeneratingLoader } from '@/components/game/GeneratingLoader'
 import { useGameStore } from '@/store/gameStore'
+import { createClient } from '@/lib/supabase/client'
 import type { Room, Round } from '@/types'
 
 interface GeneratePageProps {
@@ -54,6 +55,7 @@ export default function GeneratePage({ params }: GeneratePageProps) {
   const [expired, setExpired] = useState(false)
   const [showQuickSettings, setShowQuickSettings] = useState(false)
   const [updatingSettings, setUpdatingSettings] = useState(false)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [quickRounds, setQuickRounds] = useState(10)
   const [quickVibe, setQuickVibe] = useState('feest')
   const [quickGroep, setQuickGroep] = useState('vrienden')
@@ -87,6 +89,13 @@ export default function GeneratePage({ params }: GeneratePageProps) {
     setLoaded(true)
     return { expired: false, roundCount }
   }, [code])
+
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data }) => {
+      setIsLoggedIn(!!data.user)
+    })
+  }, [])
 
   const generate = useCallback(async () => {
     setGenerating(true)
@@ -158,10 +167,20 @@ export default function GeneratePage({ params }: GeneratePageProps) {
             GAME VERLOPEN
           </span>
           <h1 className="text-3xl font-bold leading-tight">deze game is verlopen.</h1>
-          <p className="text-sm text-[var(--text-muted)]">Start een nieuwe game vanuit je dashboard.</p>
-          <Button variant="mint" size="lg" onClick={() => router.push('/dashboard')}>
-            Naar dashboard →
-          </Button>
+          <p className="text-sm text-[var(--text-muted)]">
+            {isLoggedIn
+              ? 'Start een nieuwe game vanuit je dashboard.'
+              : 'Maak een account aan om zelf een game te starten.'}
+          </p>
+          {isLoggedIn ? (
+            <Button variant="mint" size="lg" onClick={() => router.push('/dashboard')}>
+              Naar dashboard →
+            </Button>
+          ) : (
+            <Button variant="mint" size="lg" onClick={() => router.push('/register')}>
+              Account aanmaken →
+            </Button>
+          )}
         </div>
       </MobileContainer>
     )

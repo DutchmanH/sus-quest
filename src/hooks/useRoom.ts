@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { getLatestActivityTimestamp, isGameExpired, isSessionExpired } from '@/lib/game-expiry'
+import { isRoomExpired } from '@/lib/game-expiry'
 import { createClient } from '@/lib/supabase/client'
 import type { Room, RoomPlayer, Round } from '@/types'
 
@@ -12,9 +12,9 @@ export function useRoom(code: string) {
   const [loading, setLoading] = useState(true)
   const [expired, setExpired] = useState(false)
 
-  const supabase = useRef(createClient()).current
-  // roomId becomes available after initial fetch; realtime handlers read it via ref
+  const [supabase] = useState(() => createClient())
   const roomIdRef = useRef<string | undefined>(undefined)
+  const currentRoundNumberRef = useRef<number | undefined>(undefined)
 
   useEffect(() => {
     if (!code) return
@@ -32,7 +32,9 @@ export function useRoom(code: string) {
         if (cancelled || roomError || !roomData) return
 
         roomIdRef.current = roomData.id
+        currentRoundNumberRef.current = roomData.current_round
         setRoom(roomData as Room)
+        setExpired(isRoomExpired(roomData as Room))
 
         const needsRound = roomData.status === 'playing' || roomData.status === 'finished'
         const [{ data: playersData }, { data: roundData }] = await Promise.all([
@@ -54,12 +56,6 @@ export function useRoom(code: string) {
         if (cancelled) return
         setPlayers((playersData ?? []) as RoomPlayer[])
         if (roundData) setCurrentRound(roundData as Round)
-        const latestActivityAt = getLatestActivityTimestamp(
-          roomData.created_at,
-          (playersData ?? []).at(-1)?.joined_at,
-          roundData?.created_at
-        )
-        setExpired(isSessionExpired(roomData.created_at) || isGameExpired(latestActivityAt))
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -67,9 +63,6 @@ export function useRoom(code: string) {
 
     loadInitialData()
 
-    // Subscribe immediately so no events are missed while initial data loads.
-    // roomIdRef.current is checked at event-handler time, not subscription-setup time,
-    // so we don't need a server-side filter (which requires REPLICA IDENTITY FULL).
     const channel = supabase
       .channel(`room-${code}`)
       .on(
@@ -78,10 +71,9 @@ export function useRoom(code: string) {
         (payload) => {
           if (payload.eventType === 'UPDATE') {
             const nextRoom = payload.new as Room
+            currentRoundNumberRef.current = nextRoom.current_round
             setRoom(nextRoom)
-            if (nextRoom.status === 'finished' && nextRoom.current_round <= 1) {
-              setExpired(true)
-            }
+            setExpired(isRoomExpired(nextRoom))
           }
         }
       )
@@ -101,12 +93,16 @@ export function useRoom(code: string) {
       )
       .on(
         'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'rounds' },
+        { event: '*', schema: 'public', table: 'rounds' },
         (payload) => {
-          const updated = payload.new as Round
-          if (roomIdRef.current && updated.room_id !== roomIdRef.current) return
+          const changedRound = (payload.new ?? payload.old) as Round
+          if (!changedRound) return
+          if (roomIdRef.current && changedRound.room_id !== roomIdRef.current) return
           setCurrentRound((prev) => {
-            if (prev?.id === updated.id || updated.status === 'active') return updated
+            const currentRoundNumber = currentRoundNumberRef.current
+            if (prev?.id === changedRound.id) return changedRound
+            if (changedRound.status === 'active') return changedRound
+            if (currentRoundNumber && changedRound.round_number === currentRoundNumber) return changedRound
             return prev
           })
         }
@@ -120,17 +116,39 @@ export function useRoom(code: string) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code])
 
+  // Periodic expiry check — room.last_activity_at updates via realtime when triggers fire
   useEffect(() => {
     if (!room) return
-    const evaluate = () => {
-      const latestPlayer = [...players].sort((a, b) => Date.parse(b.joined_at) - Date.parse(a.joined_at))[0]
-      const latestActivityAt = getLatestActivityTimestamp(room.created_at, latestPlayer?.joined_at, currentRound?.created_at)
-      setExpired(isSessionExpired(room.created_at) || isGameExpired(latestActivityAt))
-    }
-    evaluate()
-    const timer = setInterval(evaluate, 30_000)
+    const timer = setInterval(() => {
+      setExpired(isRoomExpired(room))
+    }, 30_000)
     return () => clearInterval(timer)
-  }, [room, players, currentRound])
+  }, [room])
+
+  useEffect(() => {
+    if (!roomIdRef.current) return
+    if (!(room?.status === 'playing' || room?.status === 'finished')) return
+
+    let cancelled = false
+    async function refreshCurrentRound() {
+      const { data } = await supabase
+        .from('rounds')
+        .select('*')
+        .eq('room_id', roomIdRef.current)
+        .eq('round_number', room!.current_round)
+        .maybeSingle()
+      if (!cancelled && data) {
+        setCurrentRound(data as Round)
+      }
+    }
+
+    refreshCurrentRound()
+
+    return () => {
+      cancelled = true
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room?.id, room?.status, room?.current_round, supabase])
 
   return { room, players, currentRound, loading, expired }
 }

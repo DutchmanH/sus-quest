@@ -26,6 +26,7 @@ export async function proxy(request: NextRequest) {
   )
 
   const { pathname } = request.nextUrl
+  const isProtectedAppRoute = pathname === '/dashboard' || pathname === '/account' || pathname === '/create-party'
 
   if (pathname.startsWith('/admin')) {
     // Admin routes need server-validated user (network call, but only for /admin)
@@ -39,6 +40,11 @@ export async function proxy(request: NextRequest) {
       .eq('id', user.id)
       .single()
     if (!profile?.is_admin) {
+      return NextResponse.redirect(new URL('/', request.url))
+    }
+  } else if (isProtectedAppRoute) {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
       return NextResponse.redirect(new URL('/', request.url))
     }
   } else if (pathname === '/login' || pathname === '/register' || pathname === '/') {

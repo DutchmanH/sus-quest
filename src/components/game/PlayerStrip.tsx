@@ -14,6 +14,7 @@ export function PlayerStrip({ players, activePlayerId }: PlayerStripProps) {
           <Avatar
             name={player.display_name}
             color={player.avatar_color}
+            icon={player.avatar_icon ?? undefined}
             size="lg"
             active={player.id === activePlayerId}
           />

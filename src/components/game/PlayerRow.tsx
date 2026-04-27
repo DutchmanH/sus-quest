@@ -5,14 +5,16 @@ interface PlayerRowProps {
   player: RoomPlayer
   isMe?: boolean
   icon?: string
+  highlightMeRing?: boolean
   selectable?: boolean
   selected?: boolean
   onSelect?: () => void
   showScore?: boolean
   rank?: number
+  showHostTag?: boolean
 }
 
-export function PlayerRow({ player, isMe, icon, selectable, selected, onSelect, showScore, rank }: PlayerRowProps) {
+export function PlayerRow({ player, isMe, icon, highlightMeRing = true, selectable, selected, onSelect, showScore, rank, showHostTag = true }: PlayerRowProps) {
   return (
     <button
       onClick={onSelect}
@@ -24,7 +26,7 @@ export function PlayerRow({ player, isMe, icon, selectable, selected, onSelect, 
         ${selected
           ? 'bg-[var(--coral)] text-white'
           : isMe
-            ? 'bg-[var(--bg-card)] ring-1 ring-[var(--mint)] ring-offset-1 ring-offset-[var(--bg-primary)]'
+            ? `bg-[var(--bg-card)] ${highlightMeRing ? 'ring-1 ring-[var(--mint)] ring-offset-1 ring-offset-[var(--bg-primary)]' : ''}`
             : 'bg-[var(--bg-card)] hover:bg-[var(--bg-card-hover)]'
         }
       `}
@@ -44,7 +46,7 @@ export function PlayerRow({ player, isMe, icon, selectable, selected, onSelect, 
           <span className="ml-2 text-[10px] font-mono tracking-widest text-[var(--mint)] opacity-80">JIJ</span>
         )}
       </span>
-      {player.is_host && (
+      {showHostTag && player.is_host && (
         <span className="text-xs font-mono tracking-widest border border-[var(--mint)] text-[var(--mint)] px-2 py-0.5 rounded-full">
           HOST
         </span>
@@ -57,7 +59,7 @@ export function PlayerRow({ player, isMe, icon, selectable, selected, onSelect, 
           {player.score}
         </span>
       )}
-      {!selectable && !showScore && !selected && (
+      {!showScore && !selected && (isMe || !selectable) && (
         <span className={`text-xs font-mono tracking-widest px-2 py-0.5 rounded-full border ${
           player.is_ready
             ? 'border-[var(--mint)] text-[var(--mint)]'

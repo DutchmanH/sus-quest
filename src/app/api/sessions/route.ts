@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { isSessionExpired } from '@/lib/game-expiry'
+import { isRoomExpired } from '@/lib/game-expiry'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 
 export async function GET() {
@@ -37,17 +37,17 @@ export async function GET() {
     if (roomIds.length > 0) {
       const { data: rooms } = await supabase
         .from('rooms')
-        .select('id, code, game_name, status, created_at, host_id')
+        .select('id, code, game_name, status, created_at, last_activity_at, host_id')
         .in('id', roomIds)
         .neq('status', 'finished')
         .order('created_at', { ascending: false })
         .limit(10)
 
       if (rooms && rooms.length > 0) {
-        const nonExpiredRooms = rooms.filter(room => !isSessionExpired(room.created_at))
+        const nonExpiredRooms = rooms.filter(room => !isRoomExpired(room))
 
         const expiredRoomIds = rooms
-          .filter(room => isSessionExpired(room.created_at) && room.status !== 'finished')
+          .filter(room => isRoomExpired(room))
           .map(room => room.id)
 
         if (expiredRoomIds.length > 0) {

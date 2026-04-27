@@ -1,4 +1,4 @@
-import { GAME_INACTIVITY_TTL_MS, SESSION_TTL_MS } from '@/lib/game-config'
+import { SESSION_TTL_MS, STATUS_INACTIVITY_TTL_MS } from '@/lib/game-config'
 
 type TimestampInput = string | null | undefined
 
@@ -14,16 +14,14 @@ export function isSessionExpired(createdAt: TimestampInput): boolean {
   return Date.now() - createdMs > SESSION_TTL_MS
 }
 
-export function isGameExpired(lastActivityAt: TimestampInput): boolean {
-  const activityMs = toTimestampMs(lastActivityAt)
-  if (!activityMs) return false
-  return Date.now() - activityMs > GAME_INACTIVITY_TTL_MS
-}
-
-export function getLatestActivityTimestamp(...timestamps: TimestampInput[]): string | null {
-  const latest = timestamps.reduce((max, current) => {
-    const currentMs = toTimestampMs(current)
-    return currentMs > max ? currentMs : max
-  }, 0)
-  return latest ? new Date(latest).toISOString() : null
+export function isRoomExpired(room: {
+  created_at: string
+  last_activity_at: string
+  status: string
+}): boolean {
+  if (isSessionExpired(room.created_at)) return true
+  const inactivityTtl = STATUS_INACTIVITY_TTL_MS[room.status] ?? STATUS_INACTIVITY_TTL_MS['lobby']
+  const lastActivityMs = toTimestampMs(room.last_activity_at)
+  if (!lastActivityMs) return false
+  return Date.now() - lastActivityMs > inactivityTtl
 }
