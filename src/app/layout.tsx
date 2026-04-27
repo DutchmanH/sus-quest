@@ -10,8 +10,23 @@ const spaceGrotesk = Space_Grotesk({
 
 export const metadata: Metadata = {
   title: "SusQuest — trust no one.",
-  description: "A multiplayer party game where everyone is suspicious. trust no one. not u.",
+  description: "Multiplayer party game — elke ronde heeft iemand een geheime opdracht. Wie is de sus?",
   manifest: "/manifest.json",
+  metadataBase: new URL("https://susquest.app"),
+  openGraph: {
+    title: "SusQuest — trust no one.",
+    description: "Multiplayer party game — elke ronde heeft iemand een geheime opdracht. Wie is de sus?",
+    url: "https://susquest.app",
+    siteName: "SusQuest",
+    locale: "nl_NL",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "SusQuest — trust no one.",
+    description: "Multiplayer party game — elke ronde heeft iemand een geheime opdracht. Wie is de sus?",
+  },
+  keywords: ["party game", "multiplayer", "sus", "drinkspel", "gezelschapsspel"],
 };
 
 export const viewport: Viewport = {

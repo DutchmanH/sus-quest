@@ -104,7 +104,14 @@ export function CreatePartyPage() {
 
         {/* Back + progress */}
         <div className="flex items-center gap-4 mb-6">
-          {step > 1 && (
+          {step === 1 ? (
+            <button
+              onClick={() => router.push('/dashboard')}
+              className="text-[var(--text-muted)] text-sm hover:text-[var(--text-primary)] transition-colors shrink-0"
+            >
+              ←
+            </button>
+          ) : (
             <button
               onClick={prev}
               className="text-[var(--text-muted)] text-sm hover:text-[var(--text-primary)] transition-colors shrink-0"

@@ -80,7 +80,25 @@ export async function GET() {
       }
     }
 
-    return NextResponse.json({ profile, sessions })
+    // Game history (last 20 finished games)
+    const { data: historyRows } = await supabase
+      .from('game_history')
+      .select('id, game_name, player_count, my_score, my_position, is_host, played_at')
+      .eq('user_id', user.id)
+      .order('played_at', { ascending: false })
+      .limit(20)
+
+    const history = (historyRows ?? []).map(h => ({
+      id: h.id,
+      game_name: h.game_name ?? null,
+      player_count: h.player_count,
+      my_score: h.my_score,
+      my_position: h.my_position,
+      is_host: h.is_host,
+      played_at: h.played_at,
+    }))
+
+    return NextResponse.json({ profile, sessions, history })
   } catch (err) {
     console.error('Sessions error:', err)
     return NextResponse.json({ error: 'Ophalen mislukt' }, { status: 500 })
