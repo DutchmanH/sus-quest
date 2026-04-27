@@ -15,6 +15,10 @@ export interface Profile {
   avatar_color: string
   is_admin: boolean
   games_played: number
+  times_sus: number
+  sus_successes: number
+  correct_accusations: number
+  total_score: number
   created_at: string
 }
 

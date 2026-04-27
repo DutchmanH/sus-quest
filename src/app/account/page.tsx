@@ -21,24 +21,35 @@ export default function AccountPage() {
   const [theme, setTheme] = useState<'dark' | 'light'>(() =>
     typeof window !== 'undefined' && localStorage.getItem('susquest-theme') === 'light' ? 'light' : 'dark'
   )
+  const [stats, setStats] = useState<{
+    games_played: number
+    times_sus: number
+    sus_successes: number
+    correct_accusations: number
+    total_score: number
+  } | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
-    // Load profile
     fetch('/api/sessions')
       .then(r => r.json())
       .then(({ profile }) => {
         if (profile) {
           setUsername(profile.username ?? '')
           setAvatarColor(profile.avatar_color ?? AVATAR_COLORS[0])
+          setStats({
+            games_played: profile.games_played ?? 0,
+            times_sus: profile.times_sus ?? 0,
+            sus_successes: profile.sus_successes ?? 0,
+            correct_accusations: profile.correct_accusations ?? 0,
+            total_score: profile.total_score ?? 0,
+          })
         }
       })
       .finally(() => setLoading(false))
-
-
   }, [])
 
   function applyTheme(t: 'dark' | 'light') {
@@ -228,6 +239,36 @@ export default function AccountPage() {
               ))}
             </div>
           </div>
+
+          {/* Stats */}
+          {stats && (
+            <div>
+              <label className="text-xs font-mono tracking-widest text-[var(--text-muted)] mb-3 block uppercase">
+                Jouw statistieken
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { label: 'Games gespeeld', value: stats.games_played, color: 'var(--mint)' },
+                  { label: 'Totaal punten', value: stats.total_score, color: 'var(--gold)' },
+                  { label: 'Keer sus', value: stats.times_sus, color: 'var(--coral)' },
+                  { label: 'Missie voltooid', value: stats.sus_successes, color: 'var(--coral)' },
+                  { label: 'Sus ontmaskerd', value: stats.correct_accusations, color: 'var(--mint)' },
+                  {
+                    label: 'Sus slagingsratio',
+                    value: stats.times_sus > 0
+                      ? `${Math.round((stats.sus_successes / stats.times_sus) * 100)}%`
+                      : '—',
+                    color: 'var(--gold)',
+                  },
+                ].map(({ label, value, color }) => (
+                  <div key={label} className="bg-[var(--bg-card)] rounded-2xl px-4 py-3">
+                    <p className="text-2xl font-bold" style={{ color }}>{value}</p>
+                    <p className="text-xs font-mono text-[var(--text-muted)] mt-0.5">{label}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {error && <p className="text-[var(--coral)] text-sm">{error}</p>}
         </div>
