@@ -118,9 +118,12 @@ export default function DashboardPage() {
 
         {/* Top bar */}
         <div className="flex items-center justify-between mb-8">
-          <span className="text-xs font-mono tracking-widest text-[var(--text-muted)]">
+          <button
+            onClick={() => router.push('/')}
+            className="text-xs font-mono tracking-widest text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+          >
             SUSQUEST
-          </span>
+          </button>
           <div ref={gearRef} className="relative">
             <button
               onClick={() => setGearOpen(o => !o)}
