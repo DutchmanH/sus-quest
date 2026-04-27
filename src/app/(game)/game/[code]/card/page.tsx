@@ -28,15 +28,17 @@ export default function CardPage({ params }: CardPageProps) {
   useEffect(() => {
     if (!currentRound || !playerId) return
 
+    const round = currentRound
+
     async function loadCard() {
-      const isSus = currentRound.sidequest_player_id === playerId
-      const hasSidequest = currentRound.has_sidequest
+      const isSus = round.sidequest_player_id === playerId
+      const hasSidequest = round.has_sidequest
       const sidequestText = language === 'en'
-        ? (currentRound.sidequest_en ?? 'Keep it subtle. No one should notice.')
-        : (currentRound.sidequest_nl ?? 'Houd het subtiel. Niemand mag het merken.')
+        ? (round.sidequest_en ?? 'Keep it subtle. No one should notice.')
+        : (round.sidequest_nl ?? 'Houd het subtiel. Niemand mag het merken.')
       const fakeTaskText = language === 'en'
-        ? (currentRound.fake_task_en || 'Stay sharp and trust no one.')
-        : (currentRound.fake_task_nl || 'Blijf scherp en vertrouw niemand.')
+        ? (round.fake_task_en || 'Stay sharp and trust no one.')
+        : (round.fake_task_nl || 'Blijf scherp en vertrouw niemand.')
       const noSidequestText = language === 'en'
         ? 'No sidequest this round. Keep a poker face anyway.'
         : 'Geen sidequest deze ronde. Houd alsnog je pokerface.'
