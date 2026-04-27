@@ -6,6 +6,7 @@ import { MobileContainer } from '@/components/layout/MobileContainer'
 import { Button } from '@/components/ui/Button'
 import { DEFAULT_ICON } from '@/lib/avatars'
 import { generateFunnyGameName } from '@/lib/funny-game-name'
+import { getSeasonalHint } from '@/lib/seasonal-events'
 import { useGameStore } from '@/store/gameStore'
 import type { Setting, Groep, Boldness, SeasonalTheme } from '@/types'
 
@@ -55,6 +56,7 @@ export function CreatePartyPage() {
 
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState<string | null>(null)
+  const seasonalHint = getSeasonalHint()
 
   function prev() { setError(null); setStep(s => Math.max(1, s - 1)) }
   function next() { setStep(s => Math.min(TOTAL_STEPS, s + 1)) }
@@ -313,12 +315,38 @@ export function CreatePartyPage() {
         {/* ── Step 5: Thema ─────────────────────────────────────────────── */}
         {step === 5 && (
           <>
-            <div className="mb-8">
+            <div className="mb-6">
               <h1 className="text-4xl font-bold leading-tight">
                 extra <br />
                 <span className="italic text-[var(--gold)]">seizoenssmaak?</span>
               </h1>
             </div>
+
+            {seasonalHint && (
+              <button
+                onClick={() => setSeasonalTheme(seasonalHint.key)}
+                className="w-full text-left mb-5 rounded-2xl px-4 py-4 border transition-all"
+                style={{
+                  background: 'rgba(93,237,212,0.06)',
+                  borderColor: 'rgba(93,237,212,0.3)',
+                }}
+              >
+                <div className="flex items-start gap-3">
+                  <span className="text-2xl shrink-0 mt-0.5">{seasonalHint.emoji}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-mono tracking-widest text-[var(--mint)] mb-1 uppercase">
+                      Psst — wij zien het ook
+                    </p>
+                    <p className="text-sm font-semibold text-[var(--text-primary)] leading-snug">
+                      {seasonalHint.message}
+                    </p>
+                    <p className="text-xs text-[var(--text-muted)] mt-1">
+                      Tik om direct te kiezen ↓
+                    </p>
+                  </div>
+                </div>
+              </button>
+            )}
             <div className="flex flex-col gap-3 flex-1">
               <button
                 onClick={() => setSeasonalTheme(null)}

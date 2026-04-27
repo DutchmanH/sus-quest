@@ -9,6 +9,13 @@ interface SeasonalEventDefinition {
   shortInstructionEn: string
 }
 
+export interface SeasonalHint {
+  key: SeasonalTheme
+  emoji: string
+  label: string
+  message: string
+}
+
 const FIXED_EVENTS: SeasonalEventDefinition[] = [
   {
     key: 'koningsdag',
@@ -53,6 +60,96 @@ const FIXED_EVENTS: SeasonalEventDefinition[] = [
 ]
 
 const CUSTOM_EVENTS: SeasonalEventDefinition[] = []
+
+const EVENT_HINTS: Array<{
+  key: SeasonalTheme
+  month: number
+  day: number
+  emoji: string
+  beforeDays: number
+  afterDays: number
+  messages: string[]
+}> = [
+  {
+    key: 'koningsdag',
+    month: 4, day: 27,
+    emoji: '🧡',
+    beforeDays: 2, afterDays: 1,
+    messages: [
+      'Alles staat al in het oranje — gooi er wat koningsdag-vragen in?',
+      'Over een paar dagen is het Koningsdag. Oranje chaos in de vragen?',
+      'Gisteren was het Koningsdag. Had je moeten gebruiken 😅',
+    ],
+  },
+  {
+    key: 'sinterklaas',
+    month: 12, day: 5,
+    emoji: '🎁',
+    beforeDays: 3, afterDays: 1,
+    messages: [
+      'Sinterklaas komt eraan — steek een surprise in de vragen?',
+      'Het is bijna pakjesavond! Voeg wat Sinterklaas-sfeertje toe?',
+      'Gisteren was pakjesavond — de pepernoten zijn op maar de vragen nog niet.',
+    ],
+  },
+  {
+    key: 'kerst',
+    month: 12, day: 25,
+    emoji: '🎄',
+    beforeDays: 5, afterDays: 2,
+    messages: [
+      'Het ruikt naar kerstboom — gooi er wat kerstsfeer in?',
+      'Kerst is bijna hier. Laat de vragen ook gezellig worden?',
+      'Kerst is net geweest — maar de kerstsweaters zitten nog aan, toch?',
+    ],
+  },
+  {
+    key: 'oud_en_nieuw',
+    month: 12, day: 31,
+    emoji: '🎆',
+    beforeDays: 3, afterDays: 1,
+    messages: [
+      'Oudjaar is bijna — vuurwerk én sus-vragen in één avond?',
+      'Nieuwjaarsnacht staat voor de deur. Voeg wat oud & nieuw-energie toe?',
+      'Het is net nieuwjaar — resoluties al gebroken? Goede vragen voor.',
+    ],
+  },
+  {
+    key: 'carnaval',
+    month: 2, day: 15,
+    emoji: '🎭',
+    beforeDays: 4, afterDays: 2,
+    messages: [
+      'Carnaval is begonnen — verkleed én sus in één klap?',
+      'Bijna carnaval! Voeg wat feestgedrag-vragen toe voor de sfeer?',
+      'Carnaval is net achter de rug. De kostuum-energie zit er nog in.',
+    ],
+  },
+]
+
+function daysBetween(a: Date, b: Date): number {
+  return Math.round((b.getTime() - a.getTime()) / 86_400_000)
+}
+
+export function getSeasonalHint(now?: Date): SeasonalHint | null {
+  const date = now ?? new Date()
+  for (const event of EVENT_HINTS) {
+    const eventDate = new Date(date.getFullYear(), event.month - 1, event.day)
+    const diff = daysBetween(date, eventDate)
+    if (diff >= 0 && diff <= event.beforeDays) {
+      // Before the event
+      const msgIndex = event.beforeDays - diff
+      const message = event.messages[Math.min(msgIndex, event.messages.length - 2)] ?? event.messages[0]
+      return { key: event.key, emoji: event.emoji, label: event.key, message }
+    }
+    if (diff < 0 && Math.abs(diff) <= event.afterDays) {
+      // After the event
+      const message = event.messages[event.messages.length - 1]
+      return { key: event.key, emoji: event.emoji, label: event.key, message }
+    }
+  }
+  return null
+}
 
 const MANUAL_THEME_CONTEXT: Record<SeasonalTheme, SeasonalEventDefinition> = {
   koningsdag: FIXED_EVENTS[0],
