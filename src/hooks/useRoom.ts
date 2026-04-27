@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { getLatestActivityTimestamp, isGameExpired, isSessionExpired } from '@/lib/game-expiry'
 import { createClient } from '@/lib/supabase/client'
 import type { Room, RoomPlayer, Round } from '@/types'
 
@@ -9,6 +10,7 @@ export function useRoom(code: string) {
   const [players, setPlayers] = useState<RoomPlayer[]>([])
   const [currentRound, setCurrentRound] = useState<Round | null>(null)
   const [loading, setLoading] = useState(true)
+  const [expired, setExpired] = useState(false)
 
   const supabase = useRef(createClient()).current
   // roomId becomes available after initial fetch; realtime handlers read it via ref
@@ -52,6 +54,12 @@ export function useRoom(code: string) {
         if (cancelled) return
         setPlayers((playersData ?? []) as RoomPlayer[])
         if (roundData) setCurrentRound(roundData as Round)
+        const latestActivityAt = getLatestActivityTimestamp(
+          roomData.created_at,
+          (playersData ?? []).at(-1)?.joined_at,
+          roundData?.created_at
+        )
+        setExpired(isSessionExpired(roomData.created_at) || isGameExpired(latestActivityAt))
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -68,7 +76,13 @@ export function useRoom(code: string) {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'rooms', filter: `code=eq.${code.toUpperCase()}` },
         (payload) => {
-          if (payload.eventType === 'UPDATE') setRoom(payload.new as Room)
+          if (payload.eventType === 'UPDATE') {
+            const nextRoom = payload.new as Room
+            setRoom(nextRoom)
+            if (nextRoom.status === 'finished' && nextRoom.current_round <= 1) {
+              setExpired(true)
+            }
+          }
         }
       )
       .on(
@@ -106,5 +120,17 @@ export function useRoom(code: string) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code])
 
-  return { room, players, currentRound, loading }
+  useEffect(() => {
+    if (!room) return
+    const evaluate = () => {
+      const latestPlayer = [...players].sort((a, b) => Date.parse(b.joined_at) - Date.parse(a.joined_at))[0]
+      const latestActivityAt = getLatestActivityTimestamp(room.created_at, latestPlayer?.joined_at, currentRound?.created_at)
+      setExpired(isSessionExpired(room.created_at) || isGameExpired(latestActivityAt))
+    }
+    evaluate()
+    const timer = setInterval(evaluate, 30_000)
+    return () => clearInterval(timer)
+  }, [room, players, currentRound])
+
+  return { room, players, currentRound, loading, expired }
 }

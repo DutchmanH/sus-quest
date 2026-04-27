@@ -16,7 +16,7 @@ export default function GamePage({ params }: GamePageProps) {
   const { code } = use(params)
   const router = useRouter()
   const { playerId, language } = useGameStore()
-  const { room, players, currentRound, loading } = useRoom(code)
+  const { room, players, currentRound, loading, expired } = useRoom(code)
 
   useEffect(() => {
     if (room?.status === 'finished') {
@@ -29,6 +29,25 @@ export default function GamePage({ params }: GamePageProps) {
       router.push(`/game/${code}/reveal`)
     }
   }, [room?.status, currentRound, code, router])
+
+  if (expired || (room?.status === 'finished' && room?.current_round <= 1)) {
+    return (
+      <MobileContainer>
+        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center gap-4">
+          <span className="inline-block px-3 py-1 rounded-full text-xs font-mono tracking-widest border border-[var(--coral)] text-[var(--coral)]">
+            GAME VERLOPEN
+          </span>
+          <h1 className="text-3xl font-bold leading-tight text-[var(--text-primary)]">
+            deze game is verlopen.
+          </h1>
+          <p className="text-[var(--text-muted)] text-sm">Ga terug naar de lobby of start een nieuwe sessie.</p>
+          <Button variant="mint" size="lg" onClick={() => router.push('/dashboard')}>
+            Naar dashboard →
+          </Button>
+        </div>
+      </MobileContainer>
+    )
+  }
 
   if (loading || !room || !currentRound) {
     if (!loading && room?.status === 'generating') {

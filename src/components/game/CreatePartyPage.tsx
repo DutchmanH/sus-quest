@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { MobileContainer } from '@/components/layout/MobileContainer'
 import { Button } from '@/components/ui/Button'
+import { DEFAULT_ICON } from '@/lib/avatars'
+import { generateFunnyGameName } from '@/lib/funny-game-name'
 import { useGameStore } from '@/store/gameStore'
 import type { Setting, Groep, Boldness } from '@/types'
 
@@ -27,8 +29,8 @@ const BOLDNESS_OPTIONS: { value: Boldness; emoji: string; label: string; sub: st
   { value: 'niemand_veilig', emoji: '🔥', label: 'Niemand is veilig',    sub: 'volledig ongecensureerd — jullie zijn gewaarschuwd', color: 'var(--coral)' },
 ]
 
-const STEP_LABELS = ['MODE', 'LOCATIE', 'GROEP', 'INTENSITEIT', 'RONDES']
-const TOTAL_STEPS = 5
+const STEP_LABELS = ['MODE', 'LOCATIE', 'GROEP', 'INTENSITEIT', 'RONDES', 'GAME NAAM']
+const TOTAL_STEPS = 6
 
 export function CreatePartyPage() {
   const router = useRouter()
@@ -40,6 +42,7 @@ export function CreatePartyPage() {
   const [groep, setGroep]     = useState<Groep>('vrienden')
   const [boldness, setBoldness] = useState<Boldness>('blozen')
   const [rounds, setRounds]   = useState<5 | 10 | 20>(10)
+  const [gameName, setGameName] = useState(() => generateFunnyGameName())
 
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState<string | null>(null)
@@ -48,13 +51,27 @@ export function CreatePartyPage() {
   function next() { setStep(s => Math.min(TOTAL_STEPS, s + 1)) }
 
   async function handleCreate() {
+    if (!gameName.trim()) {
+      setError('Game naam is verplicht')
+      return
+    }
     setLoading(true)
     setError(null)
     try {
       const res = await fetch('/api/rooms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rounds_total: rounds, vibe: setting, content_level: boldness, groep, mode }),
+        body: JSON.stringify({
+          rounds_total: rounds,
+          vibe: setting,
+          content_level: boldness,
+          groep,
+          mode,
+          game_name: gameName,
+          avatar_icon: typeof window !== 'undefined'
+            ? (localStorage.getItem('susquest-avatar-icon') ?? DEFAULT_ICON)
+            : DEFAULT_ICON,
+        }),
       })
       if (!res.ok) {
         const data = await res.json()
@@ -143,13 +160,17 @@ export function CreatePartyPage() {
                 onClick={() => setMode('single_device')}
                 className={`text-left p-5 rounded-3xl border border-dashed transition-all ${
                   mode === 'single_device'
-                    ? 'border-[var(--mint)] bg-[var(--bg-card)]'
+                    ? 'border-transparent bg-[var(--mint)]'
                     : 'border-[var(--border)] bg-[var(--bg-card)] opacity-80'
                 }`}
               >
-                <span className="text-xs font-mono tracking-widest text-[var(--text-muted)] mb-2 block">MODE 02</span>
-                <h2 className="text-5xl font-bold leading-none text-[var(--text-primary)] mb-2">Single Device</h2>
-                <p className="text-sm text-[var(--text-muted)] leading-relaxed max-w-[30ch]">
+                <span className={`text-xs font-mono tracking-widest mb-2 block ${mode === 'single_device' ? 'text-[var(--bg-primary)] opacity-70' : 'text-[var(--text-muted)]'}`}>
+                  MODE 02
+                </span>
+                <h2 className={`text-5xl font-bold leading-none mb-2 ${mode === 'single_device' ? 'text-[var(--bg-primary)]' : 'text-[var(--text-primary)]'}`}>
+                  Single Device
+                </h2>
+                <p className={`text-sm leading-relaxed max-w-[30ch] ${mode === 'single_device' ? 'text-[var(--bg-primary)] opacity-80' : 'text-[var(--text-muted)]'}`}>
                   een scherm doorgeven. voor als jullie telefoons dood zijn (typisch).
                 </p>
               </button>
@@ -306,6 +327,50 @@ export function CreatePartyPage() {
                   {rounds === r && <span className="text-[var(--mint)] text-lg shrink-0">✓</span>}
                 </button>
               ))}
+            </div>
+            {error && <p className="text-[var(--coral)] text-sm mt-4">{error}</p>}
+          </>
+        )}
+
+        {/* ── Step 6: Game naam ─────────────────────────────────────────── */}
+        {step === 6 && (
+          <>
+            <div className="mb-8">
+              <h1 className="text-4xl font-bold leading-tight">
+                geef je game<br />
+                <span className="italic text-[var(--coral)]">een legendarische naam.</span>
+              </h1>
+            </div>
+            <div className="flex flex-col gap-4 flex-1">
+              <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-3xl p-5">
+                <label className="text-xs font-mono tracking-widest text-[var(--text-muted)] mb-2 block uppercase">
+                  Game naam
+                </label>
+                <input
+                  value={gameName}
+                  onChange={e => setGameName(e.target.value)}
+                  maxLength={50}
+                  className="w-full bg-[var(--bg-primary)] border border-[var(--border)] rounded-2xl px-4 py-3 text-[var(--text-primary)] font-semibold focus:outline-none focus:border-[var(--mint)]"
+                />
+                <p className="text-xs text-[var(--text-muted)] mt-2">
+                  Dit zien spelers in de lobby.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3">
+                <button
+                  onClick={() => setGameName(generateFunnyGameName())}
+                  className="w-full py-3 rounded-2xl border border-[var(--border)] text-[var(--text-muted)] text-sm font-semibold hover:text-[var(--text-primary)] hover:border-[var(--mint)] transition-all"
+                >
+                  🎲 Randomize naam
+                </button>
+                <button
+                  onClick={() => setGameName(generateFunnyGameName())}
+                  className="w-full py-3 rounded-2xl border border-dashed border-[var(--border)] text-[var(--text-muted)] text-sm font-semibold hover:text-[var(--coral)] hover:border-[var(--coral)] transition-all"
+                >
+                  ✨ Nog gekker
+                </button>
+              </div>
             </div>
             {error && <p className="text-[var(--coral)] text-sm mt-4">{error}</p>}
           </>

@@ -10,37 +10,67 @@ import { Avatar } from '@/components/ui/Avatar'
 import { PlayerRow } from '@/components/game/PlayerRow'
 import { GeneratingLoader } from '@/components/game/GeneratingLoader'
 import { useRoom } from '@/hooks/useRoom'
+import { generateFunnyGameName } from '@/lib/funny-game-name'
 import { useGameStore } from '@/store/gameStore'
 import { createClient } from '@/lib/supabase/client'
 import { AVATAR_COLORS } from '@/types'
-import { AVATAR_ICONS, DEFAULT_ICON } from '@/lib/avatars'
+import { AVATAR_ICONS } from '@/lib/avatars'
 
 interface LobbyPageProps {
   params: Promise<{ code: string }>
+}
+
+function formatVibeLabel(value: string | null | undefined): string {
+  const labels: Record<string, string> = {
+    bank: 'Op de bank',
+    feest: 'Feest',
+    after_midnight: 'After midnight',
+    onderweg: 'Onderweg',
+  }
+  return value ? (labels[value] ?? value) : '-'
+}
+
+function formatGroepLabel(value: string | null | undefined): string {
+  const labels: Record<string, string> = {
+    vrienden: 'Vrienden',
+    vreemden: 'Vreemden',
+    stelletjes: 'Stelletjes',
+    familie: 'Familie',
+  }
+  return value ? (labels[value] ?? value) : '-'
+}
+
+function formatContentLabel(value: string | null | undefined): string {
+  const labels: Record<string, string> = {
+    gezellig: 'Gezellig',
+    blozen: 'Blozen',
+    niemand_veilig: 'Niemand is veilig',
+  }
+  return value ? (labels[value] ?? value) : '-'
 }
 
 export default function LobbyPage({ params }: LobbyPageProps) {
   const { code } = use(params)
   const router = useRouter()
   const { playerId } = useGameStore()
-  const { room, players, loading } = useRoom(code)
+  const { room, players, loading, expired } = useRoom(code)
   const [starting, setStarting] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
   const [gearOpen, setGearOpen] = useState(false)
-
-  // Own avatar icon (device-local)
-  const [myIcon, setMyIcon] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('susquest-avatar-icon') ?? DEFAULT_ICON
-    }
-    return DEFAULT_ICON
-  })
+  const [settingsOpen, setSettingsOpen] = useState(() =>
+    typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('settings') === '1'
+      : false
+  )
+  const [settingsSaving, setSettingsSaving] = useState(false)
+  const [settingsError, setSettingsError] = useState<string | null>(null)
+  const [gameName, setGameName] = useState('')
 
   // Edit-me modal state
   const [editOpen, setEditOpen] = useState(false)
   const [editName, setEditName] = useState('')
   const [editColor, setEditColor] = useState(AVATAR_COLORS[0])
-  const [editIcon, setEditIcon] = useState<string>(DEFAULT_ICON)
+  const [editIcon, setEditIcon] = useState<string | null>(null)
   const [editSaving, setEditSaving] = useState(false)
 
   const joinUrl = typeof window !== 'undefined'
@@ -57,6 +87,7 @@ export default function LobbyPage({ params }: LobbyPageProps) {
   const isHost = me?.is_host ?? false
   const notReadyCount = players.filter(p => !p.is_ready).length
   const canStart = players.length >= 2 && notReadyCount === 0
+
 
   function handleShare() {
     if (typeof navigator.share === 'function') {
@@ -80,15 +111,43 @@ export default function LobbyPage({ params }: LobbyPageProps) {
     if (!res.ok) {
       const data = await res.json()
       setStartError(data.error ?? 'Starten mislukt, probeer opnieuw')
+      if (res.status === 410) {
+        setTimeout(() => router.push('/dashboard'), 1200)
+      }
       setStarting(false)
     }
+  }
+
+  async function saveLobbySettings() {
+    if (!isHost || !room || room.status !== 'lobby') return
+    if (!gameName.trim()) {
+      setSettingsError('Game naam is verplicht')
+      return
+    }
+    setSettingsSaving(true)
+    setSettingsError(null)
+    const res = await fetch(`/api/rooms/${code}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        game_name: gameName.trim(),
+      }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setSettingsError(data.error ?? 'Opslaan mislukt')
+      setSettingsSaving(false)
+      return
+    }
+    setSettingsSaving(false)
+    setSettingsOpen(false)
   }
 
   function openEdit() {
     if (!me) return
     setEditName(me.display_name)
     setEditColor(me.avatar_color)
-    setEditIcon(myIcon)
+    setEditIcon(me.avatar_icon ?? null)
     setEditOpen(true)
   }
 
@@ -99,9 +158,10 @@ export default function LobbyPage({ params }: LobbyPageProps) {
     await supabase.from('room_players').update({
       display_name: editName.trim(),
       avatar_color: editColor,
+      avatar_icon: editIcon,
     }).eq('id', playerId)
-    localStorage.setItem('susquest-avatar-icon', editIcon)
-    setMyIcon(editIcon)
+    if (editIcon) localStorage.setItem('susquest-avatar-icon', editIcon)
+    else localStorage.removeItem('susquest-avatar-icon')
     setEditOpen(false)
     setEditSaving(false)
   }
@@ -111,6 +171,25 @@ export default function LobbyPage({ params }: LobbyPageProps) {
       <MobileContainer>
         <div className="flex-1 flex items-center justify-center">
           <div className="w-8 h-8 border-2 border-[var(--mint)] border-t-transparent rounded-full animate-spin" />
+        </div>
+      </MobileContainer>
+    )
+  }
+
+  if (expired || (room?.status === 'finished' && room?.current_round <= 1)) {
+    return (
+      <MobileContainer>
+        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center gap-4">
+          <span className="inline-block px-3 py-1 rounded-full text-xs font-mono tracking-widest border border-[var(--coral)] text-[var(--coral)]">
+            GAME VERLOPEN
+          </span>
+          <h1 className="text-3xl font-bold leading-tight text-[var(--text-primary)]">
+            deze lobby is verlopen.
+          </h1>
+          <p className="text-[var(--text-muted)] text-sm">Start een nieuwe game om verder te spelen.</p>
+          <Button variant="mint" size="lg" onClick={() => router.push('/dashboard')}>
+            Naar dashboard →
+          </Button>
         </div>
       </MobileContainer>
     )
@@ -131,41 +210,62 @@ export default function LobbyPage({ params }: LobbyPageProps) {
           </span>
           <div className="flex items-center gap-2">
             <Badge variant="live">LIVE</Badge>
-            {isHost && (
-              <div className="relative">
-                <button
-                  onClick={() => setGearOpen(o => !o)}
-                  className="w-8 h-8 flex items-center justify-center rounded-full bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-                  aria-label="Host opties"
-                >
-                  ⚙
-                </button>
-                {gearOpen && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setGearOpen(false)} />
-                    <div className="absolute right-0 top-10 z-50 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl overflow-hidden shadow-lg min-w-[180px]">
+            <div className="relative">
+              <button
+                onClick={() => setGearOpen(o => !o)}
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                aria-label="Lobby opties"
+              >
+                ⚙
+              </button>
+              {gearOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setGearOpen(false)} />
+                  <div className="absolute right-0 top-10 z-50 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl overflow-hidden shadow-lg min-w-[190px]">
+                    <button
+                      onClick={() => { setGearOpen(false); setGameName(room?.game_name ?? ''); setSettingsOpen(true) }}
+                      className="w-full text-left px-4 py-3 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)] transition-colors border-b border-[var(--border)]"
+                    >
+                      Lobby instellingen
+                    </button>
+                    {isHost && (
                       <button
                         onClick={() => { setGearOpen(false); router.push(`/lobby/${code}/generate`) }}
                         className="w-full text-left px-4 py-3 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)] transition-colors"
                       >
                         Vragen bekijken →
                       </button>
+                    )}
+                    {isHost && (
                       <button
                         onClick={() => { setGearOpen(false); router.push('/dashboard') }}
                         className="w-full text-left px-4 py-3 text-sm text-[var(--coral)] hover:bg-[var(--bg-card-hover)] transition-colors border-t border-[var(--border)]"
                       >
                         Spel afsluiten
                       </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Title */}
         <div className="mb-6">
+          {!!room?.game_name && (
+            <div className="mb-3">
+              <p className="text-[10px] font-mono tracking-[0.2em] text-[var(--text-muted)] uppercase mb-1">
+                vanavond spelen jullie
+              </p>
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--bg-card)] border border-[var(--border)]">
+                <span className="text-sm">🎭</span>
+                <p className="text-sm font-bold text-[var(--mint)] leading-none">
+                  {room.game_name}
+                </p>
+              </div>
+            </div>
+          )}
           <h1 className="text-4xl font-bold leading-tight">
             invite the<br />
             <span className="italic text-[var(--coral)]">suspects!!</span>
@@ -191,7 +291,7 @@ export default function LobbyPage({ params }: LobbyPageProps) {
             </div>
             <button
               onClick={handleShare}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl bg-[var(--bg-primary)] bg-opacity-20 text-[var(--bg-primary)] text-sm font-semibold hover:bg-opacity-30 transition-all"
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl bg-[var(--bg-primary)] text-[var(--mint)] text-sm font-semibold hover:opacity-90 transition-all border border-[var(--bg-primary)]"
             >
               deel link →
             </button>
@@ -221,10 +321,20 @@ export default function LobbyPage({ params }: LobbyPageProps) {
               key={player.id}
               player={player}
               isMe={player.id === playerId}
-              icon={player.id === playerId ? myIcon : undefined}
+              icon={player.avatar_icon ?? undefined}
               selectable={player.id === playerId}
               onSelect={player.id === playerId ? openEdit : undefined}
             />
+          ))}
+          {Array.from({ length: Math.max(0, 4 - players.length) }).map((_, idx) => (
+            <div
+              key={`placeholder-${idx}`}
+              className="bg-[var(--bg-card)] border border-dashed border-[var(--border)] rounded-2xl px-4 py-3 animate-pulse"
+            >
+              <p className="text-xs font-mono tracking-widest text-[var(--text-muted)]">
+                wacht op speler...
+              </p>
+            </div>
           ))}
           <p className="text-[10px] font-mono text-[var(--text-muted)] opacity-50 mt-1 text-center">
             tik op je naam om aan te passen
@@ -270,7 +380,7 @@ export default function LobbyPage({ params }: LobbyPageProps) {
 
             {/* Preview */}
             <div className="flex items-center gap-3">
-              <Avatar name={editName || '?'} color={editColor} icon={editIcon} size="lg" />
+              <Avatar name={editName || '?'} color={editColor} icon={editIcon ?? undefined} size="lg" />
               <div>
                 <p className="font-bold text-[var(--text-primary)]">{editName || '—'}</p>
                 <p className="text-xs font-mono text-[var(--text-muted)]">jouw profiel</p>
@@ -318,8 +428,8 @@ export default function LobbyPage({ params }: LobbyPageProps) {
                     onClick={() => setEditIcon(i)}
                     className="w-12 h-12 rounded-full flex items-center justify-center transition-all"
                     style={{
-                      background: 'var(--mint)',
-                      outline: editIcon === i ? '3px solid var(--text-primary)' : '3px solid transparent',
+                      background: editIcon === i ? 'var(--mint)' : 'var(--bg-card)',
+                      outline: editIcon === i ? '3px solid var(--text-primary)' : '3px solid var(--border)',
                       outlineOffset: '2px',
                     }}
                   >
@@ -332,6 +442,110 @@ export default function LobbyPage({ params }: LobbyPageProps) {
             <Button variant="mint" fullWidth size="lg" disabled={editSaving} onClick={saveEdit}>
               {editSaving ? 'Opslaan…' : 'Opslaan →'}
             </Button>
+          </div>
+        </div>
+      )}
+      {settingsOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end">
+          <div className="absolute inset-0 bg-black/60" onClick={() => !settingsSaving && setSettingsOpen(false)} />
+          <div className="relative bg-[var(--bg-primary)] rounded-t-3xl px-5 pt-6 pb-10 flex flex-col gap-4 max-h-[85vh] overflow-y-auto">
+            <div className="w-10 h-1 bg-[var(--border)] rounded-full mx-auto mb-1" />
+            <h3 className="text-xl font-bold text-[var(--text-primary)]">Lobby instellingen</h3>
+
+            <div>
+              <label className="text-xs font-mono tracking-widest text-[var(--text-muted)] mb-2 block uppercase">Game naam</label>
+              <div className="flex gap-2">
+                <input
+                  value={gameName}
+                  onChange={e => setGameName(e.target.value)}
+                  maxLength={50}
+                  className="flex-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl px-4 py-3 text-[var(--text-primary)] font-semibold focus:outline-none focus:border-[var(--mint)]"
+                />
+                <button
+                  onClick={() => setGameName(generateFunnyGameName())}
+                  className="px-3 rounded-2xl border border-[var(--border)] text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                >
+                  random
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-4">
+              <p className="text-xs font-mono tracking-widest text-[var(--text-muted)] uppercase mb-2">
+                Huidige game instellingen
+              </p>
+              <div className="grid grid-cols-2 gap-2 mb-4">
+                <div className="rounded-xl border border-[var(--border)] px-3 py-2">
+                  <p className="text-[10px] font-mono text-[var(--text-muted)] tracking-widest uppercase">Rondes</p>
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">{room?.rounds_total ?? '-'}</p>
+                </div>
+                <div className="rounded-xl border border-[var(--border)] px-3 py-2">
+                  <p className="text-[10px] font-mono text-[var(--text-muted)] tracking-widest uppercase">Setting</p>
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">{formatVibeLabel(room?.vibe)}</p>
+                </div>
+                <div className="rounded-xl border border-[var(--border)] px-3 py-2">
+                  <p className="text-[10px] font-mono text-[var(--text-muted)] tracking-widest uppercase">Groep</p>
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">{formatGroepLabel(room?.groep)}</p>
+                </div>
+                <div className="rounded-xl border border-[var(--border)] px-3 py-2">
+                  <p className="text-[10px] font-mono text-[var(--text-muted)] tracking-widest uppercase">Intensiteit</p>
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">{formatContentLabel(room?.content_level)}</p>
+                </div>
+              </div>
+              <p className="text-xs font-mono tracking-widest text-[var(--text-muted)] uppercase mb-1">
+                Vragen beheren
+              </p>
+              <p className="text-sm text-[var(--text-muted)] mb-3">
+                Bekijk je huidige vragen en genereer ze opnieuw met dezelfde of nieuwe settings.
+              </p>
+              {isHost ? (
+                <button
+                  onClick={() => {
+                    setSettingsOpen(false)
+                    router.push(`/lobby/${code}/generate`)
+                  }}
+                  className="w-full py-3 rounded-2xl border border-[var(--border)] text-[var(--text-muted)] text-sm font-semibold hover:text-[var(--text-primary)] hover:border-[var(--mint)] transition-all"
+                >
+                  Open vragenpreview →
+                </button>
+              ) : (
+                <p className="text-xs text-[var(--text-muted)]">
+                  Alleen de host kan vragen opnieuw genereren.
+                </p>
+              )}
+            </div>
+
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-4">
+              <p className="text-xs font-mono tracking-widest text-[var(--text-muted)] uppercase mb-1">
+                Jouw profiel
+              </p>
+              <p className="text-sm text-[var(--text-muted)] mb-3">
+                Pas je naam, profielfoto en kleur aan voor deze lobby.
+              </p>
+              <button
+                onClick={() => {
+                  setSettingsOpen(false)
+                  openEdit()
+                }}
+                className="w-full py-3 rounded-2xl border border-[var(--mint)] text-[var(--mint)] text-sm font-semibold hover:bg-[var(--mint)]/10 transition-all"
+              >
+                Profiel aanpassen
+              </button>
+            </div>
+
+            {settingsError && <p className="text-[var(--coral)] text-sm">{settingsError}</p>}
+            {isHost ? (
+              <Button variant="mint" fullWidth size="lg" disabled={settingsSaving} onClick={saveLobbySettings}>
+                {settingsSaving ? 'Opslaan…' : 'Instellingen opslaan'}
+              </Button>
+            ) : (
+              <button
+                onClick={() => setSettingsOpen(false)}
+                className="w-full py-3 rounded-2xl border border-[var(--border)] text-[var(--text-muted)] text-sm font-semibold hover:text-[var(--text-primary)] transition-colors"
+              >
+                Sluiten
+              </button>
+            )}
           </div>
         </div>
       )}

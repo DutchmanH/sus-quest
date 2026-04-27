@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { Avatar } from '@/components/ui/Avatar'
 import { useGameStore } from '@/store/gameStore'
 import { AVATAR_COLORS } from '@/types'
-import { AVATAR_ICONS, DEFAULT_ICON } from '@/lib/avatars'
+import { AVATAR_ICONS } from '@/lib/avatars'
 
 export default function AccountPage() {
   const router = useRouter()
@@ -15,8 +15,8 @@ export default function AccountPage() {
 
   const [username, setUsername] = useState('')
   const [avatarColor, setAvatarColor] = useState(AVATAR_COLORS[0])
-  const [avatarIcon, setAvatarIcon] = useState<string>(() =>
-    typeof window !== 'undefined' ? localStorage.getItem('susquest-avatar-icon') ?? DEFAULT_ICON : DEFAULT_ICON
+  const [avatarIcon, setAvatarIcon] = useState<string | null>(() =>
+    typeof window !== 'undefined' ? localStorage.getItem('susquest-avatar-icon') : null
   )
   const [theme, setTheme] = useState<'dark' | 'light'>(() =>
     typeof window !== 'undefined' && localStorage.getItem('susquest-theme') === 'light' ? 'light' : 'dark'
@@ -67,7 +67,8 @@ export default function AccountPage() {
       const data = await res.json()
       setError(data.error ?? 'Opslaan mislukt')
     } else {
-      localStorage.setItem('susquest-avatar-icon', avatarIcon)
+      if (avatarIcon) localStorage.setItem('susquest-avatar-icon', avatarIcon)
+      else localStorage.removeItem('susquest-avatar-icon')
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     }
@@ -106,7 +107,7 @@ export default function AccountPage() {
 
         {/* Avatar preview */}
         <div className="flex items-center gap-4 mb-8">
-          <Avatar name={username || '?'} color={avatarColor} icon={avatarIcon} size="xl" />
+          <Avatar name={username || '?'} color={avatarColor} icon={avatarIcon ?? undefined} size="xl" />
           <div>
             <p className="font-bold text-lg text-[var(--text-primary)]">{username || '—'}</p>
             <p className="text-xs font-mono text-[var(--text-muted)] mt-0.5">preview</p>
@@ -165,8 +166,8 @@ export default function AccountPage() {
                   }}
                   className="w-12 h-12 rounded-full flex items-center justify-center transition-all"
                   style={{
-                    background: 'var(--mint)',
-                    outline: avatarIcon === icon ? '3px solid var(--text-primary)' : '3px solid transparent',
+                    background: avatarIcon === icon ? 'var(--mint)' : 'var(--bg-card)',
+                    outline: avatarIcon === icon ? '3px solid var(--text-primary)' : '3px solid var(--border)',
                     outlineOffset: '2px',
                   }}
                   aria-label={`Avatar ${icon}`}

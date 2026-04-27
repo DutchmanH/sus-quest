@@ -21,6 +21,7 @@ export interface Profile {
 export interface Room {
   id: string
   code: string
+  game_name?: string | null
   host_id: string
   mode: GameMode
   status: RoomStatus
@@ -39,6 +40,7 @@ export interface RoomPlayer {
   user_id: string | null
   display_name: string
   avatar_color: string
+  avatar_icon?: string | null
   is_ready: boolean
   is_host: boolean
   score: number

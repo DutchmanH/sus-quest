@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { generateFunnyGameName } from '@/lib/funny-game-name'
 import { generateRoomCode } from '@/lib/room-code'
 import { AVATAR_COLORS } from '@/types'
 
@@ -16,13 +17,20 @@ export async function POST(request: NextRequest) {
   const supabase = await createServiceClient()
 
   // Read optional settings from body
-  let rounds_total = 10, vibe = 'feest', content_level = 'blozen', groep = 'vrienden'
+  let rounds_total = 10
+  let vibe = 'feest'
+  let content_level = 'blozen'
+  let groep = 'vrienden'
+  let game_name = generateFunnyGameName()
+  let avatar_icon: string | null = null
   try {
     const body = await request.json()
     if (body.rounds_total) rounds_total = body.rounds_total
     if (body.vibe) vibe = body.vibe
     if (body.content_level) content_level = body.content_level
     if (body.groep) groep = body.groep
+    if (typeof body.game_name === 'string' && body.game_name.trim()) game_name = body.game_name.trim().slice(0, 50)
+    if (typeof body.avatar_icon === 'string' && body.avatar_icon) avatar_icon = body.avatar_icon
   } catch { /* no body is fine */ }
 
   // Ensure profile exists (trigger may have failed on registration)
@@ -59,7 +67,7 @@ export async function POST(request: NextRequest) {
   // Create room
   const { data: room, error: roomError } = await supabase
     .from('rooms')
-    .insert({ code, host_id: user.id, rounds_total, vibe, content_level, groep })
+    .insert({ code, game_name, host_id: user.id, rounds_total, vibe, content_level, groep })
     .select()
     .single()
 
@@ -79,6 +87,7 @@ export async function POST(request: NextRequest) {
       user_id: user.id,
       display_name: profile.username,
       avatar_color: profile.avatar_color ?? AVATAR_COLORS[0],
+      avatar_icon,
       is_ready: true,
       is_host: true,
     })

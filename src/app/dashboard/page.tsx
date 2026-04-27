@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase/client'
 
 interface Session {
   code: string
+  game_name?: string | null
   status: string
   created_at: string
   is_host: boolean
@@ -37,6 +38,7 @@ export default function DashboardPage() {
   const router = useRouter()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [sessions, setSessions] = useState<Session[]>([])
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
   const [avatarIcon] = useState<string | null>(() =>
     typeof window !== 'undefined' ? localStorage.getItem('susquest-avatar-icon') : null
   )
@@ -56,6 +58,7 @@ export default function DashboardPage() {
   async function handleLogout() {
     const supabase = createClient()
     await supabase.auth.signOut()
+    setLogoutConfirmOpen(false)
     router.push('/')
     router.refresh()
   }
@@ -82,15 +85,32 @@ export default function DashboardPage() {
           <div className="flex items-center gap-4">
             <button
               onClick={() => router.push('/account')}
-              className="text-xs font-mono tracking-widest text-[var(--text-muted)] hover:text-[var(--mint)] transition-colors"
+              title="setting"
+              aria-label="setting"
+              className="w-7 h-7 text-[var(--text-muted)] hover:text-[var(--mint)] transition-colors flex items-center justify-center"
             >
-              ⚙ instellingen
+              ⚙
             </button>
             <button
-              onClick={handleLogout}
-              className="text-xs font-mono tracking-widest text-[var(--text-muted)] hover:text-[var(--coral)] transition-colors"
+              onClick={() => setLogoutConfirmOpen(true)}
+              title="uitloggen"
+              aria-label="uitloggen"
+              className="w-7 h-7 text-[var(--text-muted)] hover:text-[var(--coral)] transition-colors flex items-center justify-center"
             >
-              uitloggen →
+              <svg
+                viewBox="0 0 24 24"
+                className="w-[18px] h-[18px]"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M10 17l5-5-5-5" />
+                <path d="M15 12H3" />
+                <path d="M20 3v18" />
+              </svg>
             </button>
           </div>
         </div>
@@ -178,6 +198,9 @@ export default function DashboardPage() {
                       →
                     </span>
                   </div>
+                  {session.game_name && (
+                    <p className="text-xs text-[var(--text-muted)] mt-1">{session.game_name}</p>
+                  )}
                   <div className="flex items-center gap-3 mt-2">
                     <span className="text-xs text-[var(--text-muted)] font-mono">
                       {session.player_count} speler{session.player_count !== 1 ? 's' : ''}
@@ -193,6 +216,40 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {logoutConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center px-4 pb-6">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setLogoutConfirmOpen(false)}
+          />
+          <div className="relative w-full max-w-md bg-[var(--bg-primary)] border border-[var(--border)] rounded-3xl p-5">
+            <p className="text-xs font-mono tracking-widest text-[var(--text-muted)] mb-2 uppercase">
+              Uitloggen
+            </p>
+            <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2">
+              Weet je het zeker?
+            </h3>
+            <p className="text-sm text-[var(--text-muted)] mb-5">
+              Je huidige sessie wordt afgesloten op dit device.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setLogoutConfirmOpen(false)}
+                className="flex-1 py-3 rounded-2xl border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--text-muted)] transition-colors text-sm font-semibold"
+              >
+                Annuleren
+              </button>
+              <button
+                onClick={handleLogout}
+                className="flex-1 py-3 rounded-2xl bg-[var(--coral)] text-[var(--bg-primary)] text-sm font-semibold hover:opacity-90 transition-opacity"
+              >
+                Ja, uitloggen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </MobileContainer>
   )
 }

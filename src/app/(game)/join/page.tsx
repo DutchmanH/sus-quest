@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { Avatar } from '@/components/ui/Avatar'
 import { useGameStore } from '@/store/gameStore'
 import { AVATAR_COLORS } from '@/types'
-import { AVATAR_ICONS, DEFAULT_ICON } from '@/lib/avatars'
+import { AVATAR_ICONS } from '@/lib/avatars'
 
 function JoinForm() {
   const router = useRouter()
@@ -17,7 +17,7 @@ function JoinForm() {
   const [code, setCode] = useState(searchParams.get('code') ?? '')
   const [name, setName] = useState('')
   const [color, setColor] = useState(AVATAR_COLORS[0])
-  const [icon, setIcon] = useState<string>(DEFAULT_ICON)
+  const [icon, setIcon] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -32,14 +32,15 @@ function JoinForm() {
       const res = await fetch(`/api/rooms/${code.trim().toUpperCase()}/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ displayName: name.trim(), avatarColor: color }),
+        body: JSON.stringify({ displayName: name.trim(), avatarColor: color, avatarIcon: icon }),
       })
       const data = await res.json()
       if (!res.ok) {
         setError(data.error ?? 'Joinen mislukt')
         return
       }
-      localStorage.setItem('susquest-avatar-icon', icon)
+      if (icon) localStorage.setItem('susquest-avatar-icon', icon)
+      else localStorage.removeItem('susquest-avatar-icon')
       setPlayer(data.player.id, data.player.display_name, data.player.avatar_color)
       router.push(`/lobby/${data.room.code}`)
     } catch {
@@ -63,7 +64,7 @@ function JoinForm() {
 
         {/* Avatar preview */}
         <div className="flex items-center gap-4 mb-8">
-          <Avatar name={name || '?'} color={color} icon={icon} size="xl" />
+          <Avatar name={name || '?'} color={color} icon={icon ?? undefined} size="xl" />
           <div>
             <p className="font-bold text-lg text-[var(--text-primary)] leading-tight">
               {name || 'jouw naam'}
@@ -135,8 +136,8 @@ function JoinForm() {
                   onClick={() => setIcon(i)}
                   className="w-12 h-12 rounded-full flex items-center justify-center transition-all"
                   style={{
-                    background: 'var(--mint)',
-                    outline: icon === i ? '3px solid var(--text-primary)' : '3px solid transparent',
+                    background: icon === i ? 'var(--mint)' : 'var(--bg-card)',
+                    outline: icon === i ? '3px solid var(--text-primary)' : '3px solid var(--border)',
                     outlineOffset: '2px',
                   }}
                 >

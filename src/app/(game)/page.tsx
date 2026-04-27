@@ -10,6 +10,7 @@ export default function HomePage() {
   const router = useRouter()
   const [lang, setLang] = useState<'nl' | 'en'>('nl')
   const [liveCount, setLiveCount] = useState<number | null>(null)
+  const [inactiveCount, setInactiveCount] = useState<number | null>(null)
 
   useEffect(() => {
     // Redirect logged-in users to dashboard
@@ -21,13 +22,19 @@ export default function HomePage() {
     // Fetch live player count
     fetch('/api/live-count')
       .then(r => r.json())
-      .then(({ count }) => setLiveCount(count))
+      .then(({ count, inactiveCount: inactive }) => {
+        setLiveCount(count)
+        setInactiveCount(typeof inactive === 'number' ? inactive : null)
+      })
       .catch(() => {})
   }, [router])
 
   const liveLabel = liveCount === null
     ? 'LIVE'
     : `LIVE · ${liveCount} SUS`
+  const inactiveLabel = inactiveCount && inactiveCount > 0
+    ? ` · ${inactiveCount} INACTIVE`
+    : ''
 
   const t = lang === 'nl' ? {
     tagline: 'niet je beste vriend. niet je lief. niet jezelf.',
@@ -49,7 +56,7 @@ export default function HomePage() {
       <div className="flex items-center justify-between px-5 pt-5 pb-2">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-[var(--mint)] animate-pulse" />
-          <span className="text-xs font-mono tracking-widest text-[var(--mint)]">{liveLabel}</span>
+          <span className="text-xs font-mono tracking-widest text-[var(--mint)]">{liveLabel}{inactiveLabel}</span>
         </div>
         <div className="flex items-center gap-3">
           <button

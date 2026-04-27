@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { getLatestActivityTimestamp, isGameExpired, isSessionExpired } from '@/lib/game-expiry'
 
 export async function POST(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ code: string }> }
 ) {
   const { code } = await params
@@ -18,6 +19,32 @@ export async function POST(
 
   if (roomError || !room) return NextResponse.json({ error: 'Room niet gevonden' }, { status: 404 })
   if (room.host_id !== user.id) return NextResponse.json({ error: 'Alleen de host kan het spel starten' }, { status: 403 })
+
+  const { data: latestPlayer } = await supabase
+    .from('room_players')
+    .select('joined_at')
+    .eq('room_id', room.id)
+    .order('joined_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const { data: latestRound } = await supabase
+    .from('rounds')
+    .select('created_at')
+    .eq('room_id', room.id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const latestActivityAt = getLatestActivityTimestamp(room.created_at, latestPlayer?.joined_at, latestRound?.created_at)
+  const isExpired = isSessionExpired(room.created_at) || isGameExpired(latestActivityAt)
+  if (isExpired) {
+    await supabase.from('rooms').update({ status: 'finished' }).eq('id', room.id)
+    return NextResponse.json(
+      { error: 'Deze game is verlopen. Start een nieuwe lobby.', code: 'GAME_EXPIRED' },
+      { status: 410 }
+    )
+  }
+
   if (room.status !== 'lobby') return NextResponse.json({ error: 'Room is niet in lobby' }, { status: 409 })
 
   const { data: players, error: playersError } = await supabase
