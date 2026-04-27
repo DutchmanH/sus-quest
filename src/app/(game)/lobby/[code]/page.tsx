@@ -1,6 +1,6 @@
 'use client'
 
-import { use, useState, useEffect } from 'react'
+import { use, useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { QRCodeSVG } from 'qrcode.react'
 import { MobileContainer } from '@/components/layout/MobileContainer'
@@ -14,7 +14,7 @@ import { generateFunnyGameName } from '@/lib/funny-game-name'
 import { useGameStore } from '@/store/gameStore'
 import { createClient } from '@/lib/supabase/client'
 import { AVATAR_COLORS } from '@/types'
-import { AVATAR_ICONS } from '@/lib/avatars'
+import { AVATAR_ICONS, DEFAULT_ICON } from '@/lib/avatars'
 
 interface LobbyPageProps {
   params: Promise<{ code: string }>
@@ -65,12 +65,16 @@ export default function LobbyPage({ params }: LobbyPageProps) {
   const [settingsSaving, setSettingsSaving] = useState(false)
   const [settingsError, setSettingsError] = useState<string | null>(null)
   const [gameName, setGameName] = useState('')
+  const [readySpark, setReadySpark] = useState(false)
+  const [waitingDots, setWaitingDots] = useState(1)
+  const [lobbyFeedback, setLobbyFeedback] = useState<{ text: string; tone: 'mint' | 'gold' } | null>(null)
+
 
   // Edit-me modal state
   const [editOpen, setEditOpen] = useState(false)
   const [editName, setEditName] = useState('')
   const [editColor, setEditColor] = useState(AVATAR_COLORS[0])
-  const [editIcon, setEditIcon] = useState<string | null>(null)
+  const [editIcon, setEditIcon] = useState<string>(DEFAULT_ICON)
   const [editSaving, setEditSaving] = useState(false)
 
   const joinUrl = typeof window !== 'undefined'
@@ -84,10 +88,87 @@ export default function LobbyPage({ params }: LobbyPageProps) {
   }, [room?.status, code, router])
 
   const me = players.find(p => p.id === playerId)
+  const myIcon = me?.avatar_icon ?? undefined
   const isHost = me?.is_host ?? false
   const notReadyCount = players.filter(p => !p.is_ready).length
   const canStart = players.length >= 2 && notReadyCount === 0
+  const everyoneReady = players.length >= 2 && notReadyCount === 0
+  const prevEveryoneReadyRef = useRef(false)
+  const prevReadyByPlayerRef = useRef<Record<string, boolean>>({})
+  const prevPlayerIdsRef = useRef<string[]>([])
+  const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const initializedPlayersRef = useRef(false)
 
+  useEffect(() => {
+    const wasReady = prevEveryoneReadyRef.current
+    if (!wasReady && everyoneReady) {
+      setReadySpark(true)
+      const timer = setTimeout(() => setReadySpark(false), 900)
+      prevEveryoneReadyRef.current = everyoneReady
+      return () => clearTimeout(timer)
+    }
+    prevEveryoneReadyRef.current = everyoneReady
+  }, [everyoneReady])
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setWaitingDots(d => (d % 3) + 1)
+    }, 450)
+    return () => clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    if (feedbackTimerRef.current) {
+      clearTimeout(feedbackTimerRef.current)
+      feedbackTimerRef.current = null
+    }
+    return () => {
+      if (feedbackTimerRef.current) {
+        clearTimeout(feedbackTimerRef.current)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    const nextReadyMap: Record<string, boolean> = {}
+    const newlyReadyPlayers: string[] = []
+    const previousIds = new Set(prevPlayerIdsRef.current)
+    const newlyJoinedPlayers = players.filter(player => !previousIds.has(player.id)).map(player => player.display_name)
+
+    for (const player of players) {
+      nextReadyMap[player.id] = player.is_ready
+      const wasReady = prevReadyByPlayerRef.current[player.id] ?? false
+      if (!wasReady && player.is_ready) {
+        newlyReadyPlayers.push(player.display_name)
+      }
+    }
+
+    if (initializedPlayersRef.current) {
+      let feedback: { text: string; tone: 'mint' | 'gold' } | null = null
+      if (!prevEveryoneReadyRef.current && everyoneReady) {
+        feedback = { text: 'YES! Iedereen is ready ✦', tone: 'mint' }
+      } else if (newlyJoinedPlayers.length > 0) {
+        feedback = { text: `${newlyJoinedPlayers[0]} is gejoint ✦`, tone: 'gold' }
+      } else if (newlyReadyPlayers.length > 0) {
+        feedback = { text: `${newlyReadyPlayers[0]} is ready ✦`, tone: 'mint' }
+      }
+
+      if (feedback) {
+        setLobbyFeedback(feedback)
+        if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current)
+        feedbackTimerRef.current = setTimeout(() => setLobbyFeedback(null), 1400)
+      }
+    } else {
+      initializedPlayersRef.current = true
+    }
+
+    prevPlayerIdsRef.current = players.map(player => player.id)
+    prevReadyByPlayerRef.current = nextReadyMap
+  }, [players, everyoneReady])
+
+  useEffect(() => {
+    if (me?.avatar_icon) localStorage.setItem('susquest-avatar-icon', me.avatar_icon)
+  }, [me?.avatar_icon])
 
   function handleShare() {
     if (typeof navigator.share === 'function') {
@@ -147,7 +228,7 @@ export default function LobbyPage({ params }: LobbyPageProps) {
     if (!me) return
     setEditName(me.display_name)
     setEditColor(me.avatar_color)
-    setEditIcon(me.avatar_icon ?? null)
+    setEditIcon(me.avatar_icon ?? myIcon)
     setEditOpen(true)
   }
 
@@ -160,8 +241,8 @@ export default function LobbyPage({ params }: LobbyPageProps) {
       avatar_color: editColor,
       avatar_icon: editIcon,
     }).eq('id', playerId)
-    if (editIcon) localStorage.setItem('susquest-avatar-icon', editIcon)
-    else localStorage.removeItem('susquest-avatar-icon')
+    localStorage.setItem('susquest-avatar-icon', editIcon)
+    setMyIcon(editIcon)
     setEditOpen(false)
     setEditSaving(false)
   }
@@ -250,6 +331,13 @@ export default function LobbyPage({ params }: LobbyPageProps) {
             </div>
           </div>
         </div>
+        {lobbyFeedback && (
+          <div className={`mb-3 text-center text-xs font-mono tracking-widest ${
+            lobbyFeedback.tone === 'mint' ? 'text-[var(--mint)]' : 'text-[var(--gold)]'
+          }`}>
+            {lobbyFeedback.text}
+          </div>
+        )}
 
         {/* Title */}
         <div className="mb-6">
@@ -312,27 +400,48 @@ export default function LobbyPage({ params }: LobbyPageProps) {
         )}
 
         {/* Player list */}
-        <div className="flex flex-col gap-2 flex-1">
+        <div className={`flex flex-col gap-2 flex-1 relative transition-all duration-300 ${
+          everyoneReady ? 'rounded-2xl p-2 bg-[var(--mint)]/5 border border-[var(--mint)]/30 animate-pulse' : ''
+        }`}>
+          {readySpark && (
+            <div className="pointer-events-none absolute inset-0 rounded-2xl overflow-hidden">
+              <span className="absolute top-3 left-5 text-[var(--mint)] text-xs animate-pulse">✦</span>
+              <span className="absolute top-7 right-7 text-[var(--gold)] text-xs animate-pulse">✦</span>
+              <span className="absolute bottom-8 left-10 text-[var(--coral)] text-xs animate-pulse">✦</span>
+            </div>
+          )}
           <p className="text-xs font-mono tracking-widest text-[var(--text-muted)] mb-1">
             SPELERS ({players.length})
           </p>
-          {players.map(player => (
-            <PlayerRow
-              key={player.id}
-              player={player}
-              isMe={player.id === playerId}
-              icon={player.avatar_icon ?? undefined}
-              selectable={player.id === playerId}
-              onSelect={player.id === playerId ? openEdit : undefined}
-            />
+          {players.map((player, index) => (
+            <div key={player.id} className="relative">
+              <PlayerRow
+                player={player}
+                isMe={player.id === playerId}
+                icon={player.avatar_icon ?? (player.id === playerId ? myIcon : DEFAULT_ICON)}
+                highlightMeRing={!everyoneReady}
+                selectable={player.id === playerId}
+                onSelect={player.id === playerId ? openEdit : undefined}
+              />
+              {everyoneReady && index < players.length - 1 && (
+                <div className="flex justify-center py-1.5">
+                  <div className="h-3 w-px bg-[var(--mint)]/70" />
+                </div>
+              )}
+            </div>
           ))}
+          {everyoneReady && (
+            <p className="text-[10px] font-mono tracking-widest text-[var(--mint)] text-center mt-1">
+              TEAM IS COMPLEET ✦ KLAAR OM TE STARTEN
+            </p>
+          )}
           {Array.from({ length: Math.max(0, 4 - players.length) }).map((_, idx) => (
             <div
               key={`placeholder-${idx}`}
               className="bg-[var(--bg-card)] border border-dashed border-[var(--border)] rounded-2xl px-4 py-3 animate-pulse"
             >
               <p className="text-xs font-mono tracking-widest text-[var(--text-muted)]">
-                wacht op speler...
+                wacht op spelers{'.'.repeat(waitingDots)}
               </p>
             </div>
           ))}
@@ -380,7 +489,7 @@ export default function LobbyPage({ params }: LobbyPageProps) {
 
             {/* Preview */}
             <div className="flex items-center gap-3">
-              <Avatar name={editName || '?'} color={editColor} icon={editIcon ?? undefined} size="lg" />
+              <Avatar name={editName || '?'} color={editColor} icon={editIcon} size="lg" />
               <div>
                 <p className="font-bold text-[var(--text-primary)]">{editName || '—'}</p>
                 <p className="text-xs font-mono text-[var(--text-muted)]">jouw profiel</p>
@@ -428,8 +537,8 @@ export default function LobbyPage({ params }: LobbyPageProps) {
                     onClick={() => setEditIcon(i)}
                     className="w-12 h-12 rounded-full flex items-center justify-center transition-all"
                     style={{
-                      background: editIcon === i ? 'var(--mint)' : 'var(--bg-card)',
-                      outline: editIcon === i ? '3px solid var(--text-primary)' : '3px solid var(--border)',
+                      background: 'var(--mint)',
+                      outline: editIcon === i ? '3px solid var(--text-primary)' : '3px solid transparent',
                       outlineOffset: '2px',
                     }}
                   >
