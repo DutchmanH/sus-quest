@@ -8,8 +8,9 @@ import { Avatar } from '@/components/ui/Avatar'
 import { useGameStore } from '@/store/gameStore'
 import { AVATAR_COLORS } from '@/types'
 import { AVATAR_ICONS } from '@/lib/avatars'
+import { getUnlockedAchievements } from '@/lib/achievements'
 
-type Tab = 'instellingen' | 'statistieken'
+type Tab = 'instellingen' | 'statistieken' | 'badges'
 
 export default function AccountPage() {
   const router = useRouter()
@@ -128,11 +129,11 @@ export default function AccountPage() {
 
         {/* Tabs */}
         <div className="flex gap-1 bg-[var(--bg-card)] rounded-full p-1 mb-6">
-          {(['instellingen', 'statistieken'] as Tab[]).map(t => (
+          {(['instellingen', 'statistieken', 'badges'] as Tab[]).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`flex-1 py-2 rounded-full text-sm font-semibold transition-all ${
+              className={`flex-1 py-2 rounded-full text-xs font-semibold transition-all ${
                 tab === t
                   ? 'bg-[var(--bg-primary)] text-[var(--text-primary)] shadow-sm'
                   : 'text-[var(--text-muted)]'
@@ -327,6 +328,83 @@ export default function AccountPage() {
             )}
           </div>
         )}
+
+        {/* ── Badges tab ───────────────────────────────────────────── */}
+        {tab === 'badges' && stats && (() => {
+          const achievements = getUnlockedAchievements(stats)
+          const unlockedCount = achievements.filter(a => a.isUnlocked).length
+          const unlocked = achievements.filter(a => a.isUnlocked)
+          const locked = achievements.filter(a => !a.isUnlocked)
+          return (
+            <div className="flex flex-col gap-4 flex-1">
+              {/* Progress summary */}
+              <div className="rounded-2xl px-5 py-4 flex items-center gap-4" style={{ background: 'var(--bg-card)' }}>
+                <div className="flex-1">
+                  <p className="text-[10px] font-mono tracking-widest text-[var(--text-muted)] mb-1 uppercase">Behaald</p>
+                  <p className="text-2xl font-bold text-[var(--text-primary)]">
+                    {unlockedCount}
+                    <span className="text-base font-normal text-[var(--text-muted)]"> / {achievements.length}</span>
+                  </p>
+                </div>
+                {/* Mini progress bar */}
+                <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: 'var(--border)' }}>
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{ width: `${(unlockedCount / achievements.length) * 100}%`, background: 'var(--mint)' }}
+                  />
+                </div>
+              </div>
+
+              {/* Unlocked */}
+              {unlocked.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  <p className="text-[10px] font-mono tracking-widest text-[var(--text-muted)] uppercase px-1">Behaald</p>
+                  {unlocked.map(a => (
+                    <div
+                      key={a.id}
+                      className="flex items-center gap-4 rounded-2xl px-4 py-3 border"
+                      style={{ background: 'var(--bg-card)', borderColor: 'rgba(93,237,212,0.25)' }}
+                    >
+                      <span className="text-3xl shrink-0">{a.emoji}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-sm text-[var(--text-primary)]">{a.title}</p>
+                        <p className="text-xs text-[var(--text-muted)] mt-0.5 leading-snug">{a.description}</p>
+                      </div>
+                      <span className="text-[var(--mint)] text-sm shrink-0">✓</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Locked */}
+              {locked.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  <p className="text-[10px] font-mono tracking-widest text-[var(--text-muted)] uppercase px-1">Nog te halen</p>
+                  {locked.map(a => (
+                    <div
+                      key={a.id}
+                      className="flex items-center gap-4 rounded-2xl px-4 py-3 border opacity-40"
+                      style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}
+                    >
+                      <span className="text-3xl shrink-0 grayscale">{a.emoji}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-sm text-[var(--text-primary)]">{a.title}</p>
+                        <p className="text-xs text-[var(--text-muted)] mt-0.5 leading-snug">{a.description}</p>
+                      </div>
+                      <span className="text-[var(--text-muted)] text-sm shrink-0">🔒</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {stats.games_played === 0 && (
+                <p className="text-center text-sm text-[var(--text-muted)] font-mono mt-4">
+                  speel je eerste game om badges te verdienen ✦
+                </p>
+              )}
+            </div>
+          )
+        })()}
 
       </div>
     </MobileContainer>

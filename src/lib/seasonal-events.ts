@@ -127,15 +127,33 @@ const EVENT_HINTS: Array<{
   },
 ]
 
-function daysBetween(a: Date, b: Date): number {
-  return Math.round((b.getTime() - a.getTime()) / 86_400_000)
+function getAmsterdamYMD(date: Date): { year: number; month: number; day: number } {
+  const parts = new Intl.DateTimeFormat('nl-NL', {
+    timeZone: 'Europe/Amsterdam',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(date)
+  return {
+    year: parseInt(parts.find(p => p.type === 'year')!.value),
+    month: parseInt(parts.find(p => p.type === 'month')!.value),
+    day: parseInt(parts.find(p => p.type === 'day')!.value),
+  }
+}
+
+function calendarDaysBetween(
+  from: { year: number; month: number; day: number },
+  to: { year: number; month: number; day: number }
+): number {
+  const a = Date.UTC(from.year, from.month - 1, from.day)
+  const b = Date.UTC(to.year, to.month - 1, to.day)
+  return Math.round((b - a) / 86_400_000)
 }
 
 export function getSeasonalHint(now?: Date): SeasonalHint | null {
   const date = now ?? new Date()
+  const today = getAmsterdamYMD(date)
   for (const event of EVENT_HINTS) {
-    const eventDate = new Date(date.getFullYear(), event.month - 1, event.day)
-    const diff = daysBetween(date, eventDate)
+    const eventDate = { year: today.year, month: event.month, day: event.day }
+    const diff = calendarDaysBetween(today, eventDate)
     if (diff >= 0 && diff <= event.beforeDays) {
       // Before the event
       const msgIndex = event.beforeDays - diff
@@ -185,8 +203,7 @@ export function getManualSeasonalContext(theme: SeasonalTheme | null | undefined
 }
 
 export function getCalendarSeasonalContext(date: Date): SeasonalPromptContext | null {
-  const month = date.getUTCMonth() + 1
-  const day = date.getUTCDate()
+  const { month, day } = getAmsterdamYMD(date)
   const match = [...CUSTOM_EVENTS, ...FIXED_EVENTS].find((event) => event.month === month && event.day === day)
   if (!match) return null
   return toContext(match, 'calendar')
