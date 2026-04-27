@@ -133,38 +133,6 @@ export default function NotFound() {
             </p>
           </div>
 
-          {/* Vote cards */}
-          <div className="fu4 w-full mb-6">
-            <p className="text-[10px] font-mono tracking-widest text-[var(--text-muted)] mb-3 text-left uppercase">
-              Stemmen ingediend
-            </p>
-            <div className="flex flex-col gap-2">
-              {[
-                { icon: '🐺', name: 'Martijn' },
-                { icon: '🦊', name: 'Jenna' },
-                { icon: '🐻', name: 'Thomas' },
-              ].map(({ icon, name }, i) => (
-                <div
-                  key={name}
-                  className={`si${i + 1} flex items-center gap-3 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl px-4 py-3`}
-                >
-                  <span className="text-xl shrink-0">{icon}</span>
-                  <span className="text-sm text-[var(--text-muted)] font-mono flex-1 text-left">{name}</span>
-                  <span className="text-xs font-bold text-[var(--coral)] font-mono tracking-widest">→ PAGINA</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Verdict */}
-          <div className="vp w-full mb-8 rounded-2xl px-5 py-4 border" style={{ background: 'rgba(255,99,99,0.07)', borderColor: 'rgba(255,99,99,0.25)' }}>
-            <p className="text-[10px] font-mono tracking-widest text-[var(--coral)] mb-1 uppercase">Verdict</p>
-            <p className="text-lg font-bold text-[var(--text-primary)]">Unanimously eruit gegooid 🚪</p>
-            <p className="text-xs text-[var(--text-muted)] mt-1">
-              fout getypt? of vertrouw je de URL niet? goed. <em>vertrouw niemand.</em>
-            </p>
-          </div>
-
           {/* CTAs */}
           <div className="fu6 w-full flex flex-col gap-3">
             <Link
