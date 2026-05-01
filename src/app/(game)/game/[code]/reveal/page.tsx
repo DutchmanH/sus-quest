@@ -20,6 +20,11 @@ export default function RevealPage({ params }: RevealPageProps) {
   const { playerId, language } = useGameStore()
   const { room, players, currentRound, loading } = useRoom(code)
   const [accusations, setAccusations] = useState<Accusation[]>([])
+  const [fallbackRevealSidequest, setFallbackRevealSidequest] = useState<{
+    playerId: string | null
+    sidequestNl: string | null
+    sidequestEn: string | null
+  } | null>(null)
   const [movingNextRound, setMovingNextRound] = useState(false)
   const [nextRoundError, setNextRoundError] = useState<string | null>(null)
   const [isAuthHost, setIsAuthHost] = useState(false)
@@ -28,7 +33,13 @@ export default function RevealPage({ params }: RevealPageProps) {
     if (room?.status === 'lobby') {
       router.push(`/lobby/${code}`)
     }
-  }, [room?.status, code, router])
+    if (currentRound?.status === 'active') {
+      router.push(`/game/${code}`)
+    }
+    if (currentRound?.status === 'accuse') {
+      router.push(`/game/${code}/accuse`)
+    }
+  }, [room?.status, currentRound?.status, code, router])
 
   useEffect(() => {
     if (!currentRound) return
@@ -38,6 +49,40 @@ export default function RevealPage({ params }: RevealPageProps) {
       .select('*')
       .eq('round_id', currentRound.id)
       .then(({ data }) => setAccusations((data ?? []) as Accusation[]))
+  }, [currentRound])
+
+  useEffect(() => {
+    if (!currentRound) return
+    setFallbackRevealSidequest(null)
+    if (currentRound.sidequest_player_id) return
+
+    const supabase = createClient()
+    let cancelled = false
+
+    async function loadFallbackRevealSidequest() {
+      const { data } = await supabase
+        .from('rounds')
+        .select('sidequest_player_id, sidequest_nl, sidequest_en')
+        .eq('room_id', currentRound.room_id)
+        .lt('round_number', currentRound.round_number)
+        .not('sidequest_player_id', 'is', null)
+        .order('round_number', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (cancelled || !data) return
+      setFallbackRevealSidequest({
+        playerId: data.sidequest_player_id ?? null,
+        sidequestNl: data.sidequest_nl ?? null,
+        sidequestEn: data.sidequest_en ?? null,
+      })
+    }
+
+    void loadFallbackRevealSidequest()
+
+    return () => {
+      cancelled = true
+    }
   }, [currentRound])
 
   useEffect(() => {
@@ -90,8 +135,19 @@ export default function RevealPage({ params }: RevealPageProps) {
     )
   }
 
-  const susPlayer = players.find(p => p.id === currentRound.sidequest_player_id)
+  const revealSidequestPlayerId = currentRound.sidequest_player_id ?? fallbackRevealSidequest?.playerId ?? null
+  const revealSidequestText =
+    language === 'en'
+      ? (currentRound.sidequest_en ?? fallbackRevealSidequest?.sidequestEn ?? null)
+      : (currentRound.sidequest_nl ?? fallbackRevealSidequest?.sidequestNl ?? null)
+  const susPlayer = players.find(p => p.id === revealSidequestPlayerId)
   const hasSus = !!susPlayer
+  const questionsPerCycle = Math.max(1, Number(room.questions_per_cycle ?? 4))
+  const playCycles = Math.max(1, Number(room.play_cycles ?? Math.ceil((room.rounds_total ?? 10) / questionsPerCycle)))
+  const indexAfterIntro = Math.max(0, room.current_round - 2)
+  const currentCycleIndex = Math.min(playCycles - 1, Math.max(0, Math.floor(indexAfterIntro / (questionsPerCycle + 1))))
+  const earlyBonus = Math.max(0, playCycles - currentCycleIndex - 1)
+  const correctPointsLabel = `+${1 + earlyBonus}`
 
   return (
     <MobileContainer>
@@ -131,7 +187,7 @@ export default function RevealPage({ params }: RevealPageProps) {
               </div>
               <div className="bg-[var(--bg-primary)] bg-opacity-20 rounded-2xl px-4 py-3">
                 <p className="text-[var(--bg-primary)] italic text-sm">
-                  &ldquo;{language === 'en' ? currentRound.sidequest_en : currentRound.sidequest_nl}&rdquo;
+                  &ldquo;{revealSidequestText ?? 'Geen sidequesttekst gevonden.'}&rdquo;
                 </p>
               </div>
             </>
@@ -149,16 +205,40 @@ export default function RevealPage({ params }: RevealPageProps) {
                 const accuser = players.find(p => p.id === acc.accuser_player_id)
                 const accused = players.find(p => p.id === acc.accused_player_id)
                 return (
-                  <div key={acc.id} className="flex items-center justify-between">
-                    <span className="text-sm text-[var(--text-primary)]">
-                      {accuser?.display_name} → {accused?.display_name}
-                    </span>
+                  <div key={acc.id} className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {accuser && (
+                        <Avatar
+                          name={accuser.display_name}
+                          color={accuser.avatar_color}
+                          icon={accuser.avatar_icon ?? undefined}
+                          size="sm"
+                        />
+                      )}
+                      <span className="text-sm font-semibold text-[var(--text-primary)] truncate">
+                        {accuser?.display_name ?? 'Onbekend'}
+                      </span>
+                      <span className="text-xs font-mono tracking-widest text-[var(--gold)]">VERDENKT</span>
+                      {accused && (
+                        <Avatar
+                          name={accused.display_name}
+                          color={accused.avatar_color}
+                          icon={accused.avatar_icon ?? undefined}
+                          size="sm"
+                        />
+                      )}
+                      <span className="text-sm font-semibold text-[var(--text-primary)] truncate">
+                        {accused?.display_name ?? 'Onbekend'}
+                      </span>
+                    </div>
                     <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded-full border ${
-                      acc.is_correct
-                        ? 'border-[var(--mint)] text-[var(--mint)]'
-                        : 'border-[var(--coral)] text-[var(--coral)]'
+                      acc.is_correct === null
+                        ? 'border-[var(--border)] text-[var(--text-muted)]'
+                        : acc.is_correct
+                          ? 'border-[var(--mint)] text-[var(--mint)]'
+                          : 'border-[var(--coral)] text-[var(--coral)]'
                     }`}>
-                      {acc.is_correct ? 'BOOM · +1' : 'NEIN · -1'}
+                      {acc.is_correct === null ? 'GEEN SUS · 0' : acc.is_correct ? `BOOM · ${correctPointsLabel}` : 'NEIN · -1'}
                     </span>
                   </div>
                 )

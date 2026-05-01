@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { MobileContainer } from '@/components/layout/MobileContainer'
 import { Button } from '@/components/ui/Button'
@@ -9,11 +9,18 @@ import { createClient } from '@/lib/supabase/client'
 
 export default function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [unconfirmed, setUnconfirmed] = useState(false)
+
+  useEffect(() => {
+    if (searchParams.get('blocked') === '1') {
+      setError('Je account is geblokkeerd. Neem contact op met de beheerder.')
+    }
+  }, [searchParams])
 
   async function handleLogin() {
     if (!email || !password) { setError('Vul alle velden in'); return }
@@ -21,7 +28,7 @@ export default function LoginPage() {
     setError(null)
     setUnconfirmed(false)
     const supabase = createClient()
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password })
     if (authError) {
       if (authError.message.toLowerCase().includes('email not confirmed')) {
         setUnconfirmed(true)
@@ -30,6 +37,19 @@ export default function LoginPage() {
       }
       setLoading(false)
       return
+    }
+    if (authData.user) {
+      const { data: profileCheck } = await supabase
+        .from('profiles')
+        .select('blocked')
+        .eq('id', authData.user.id)
+        .single()
+      if (profileCheck?.blocked) {
+        await supabase.auth.signOut()
+        setError('Je account is geblokkeerd. Neem contact op met de beheerder.')
+        setLoading(false)
+        return
+      }
     }
     router.push('/dashboard')
     router.refresh()

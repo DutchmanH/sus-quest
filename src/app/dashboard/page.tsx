@@ -31,6 +31,7 @@ interface Profile {
   username: string
   avatar_color: string
   games_played: number
+  is_admin: boolean
 }
 
 function statusBadge(status: string) {
@@ -135,7 +136,15 @@ export default function DashboardPage() {
             {gearOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setGearOpen(false)} />
-                <div className="absolute right-0 top-10 z-50 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl overflow-hidden shadow-lg min-w-[160px]">
+                <div className="absolute right-0 top-10 z-50 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl overflow-hidden shadow-lg min-w-[180px]">
+                  {profile?.is_admin && (
+                    <button
+                      onClick={() => { setGearOpen(false); router.push('/admin') }}
+                      className="w-full text-left px-4 py-3 text-sm text-[var(--mint)] hover:bg-[var(--bg-card-hover)] transition-colors border-b border-[var(--border)] font-mono tracking-wider"
+                    >
+                      Admin panel ↗
+                    </button>
+                  )}
                   <button
                     onClick={() => { setGearOpen(false); router.push('/account') }}
                     className="w-full text-left px-4 py-3 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)] transition-colors border-b border-[var(--border)]"

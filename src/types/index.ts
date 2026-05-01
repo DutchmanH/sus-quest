@@ -38,6 +38,8 @@ export interface Room {
   mode: GameMode
   status: RoomStatus
   rounds_total: number
+  play_cycles?: number | null
+  questions_per_cycle?: number | null
   current_round: number
   vibe: string
   content_level: string
@@ -74,6 +76,7 @@ export interface Round {
   sidequest_en: string | null
   fake_task_nl: string
   fake_task_en: string
+  round_kind?: 'intro' | 'play' | 'accuse_gate'
   status: RoundStatus
   created_at: string
 }
@@ -115,4 +118,12 @@ export const AVATAR_COLORS = [
   '#F472B6', // pink
   '#34D399', // green
   '#FB923C', // orange
+  '#22D3EE', // cyan
+  '#818CF8', // indigo
+  '#E879F9', // fuchsia
+  '#F97316', // deep orange
+  '#A3E635', // lime
+  '#F43F5E', // rose
+  '#14B8A6', // teal
+  '#C084FC', // violet
 ]

@@ -29,23 +29,25 @@ export async function proxy(request: NextRequest) {
   const isProtectedAppRoute = pathname === '/dashboard' || pathname === '/account' || pathname === '/create-party'
 
   if (pathname.startsWith('/admin')) {
-    // Admin routes need server-validated user (network call, but only for /admin)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
+    // Keep this lightweight in proxy: only require an authenticated session.
+    // Admin authorization happens server-side in admin layout/API routes.
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) {
       return NextResponse.redirect(new URL('/login', request.url))
+    }
+  } else if (isProtectedAppRoute) {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) {
+      return NextResponse.redirect(new URL('/', request.url))
     }
     const { data: profile } = await supabase
       .from('profiles')
-      .select('is_admin')
-      .eq('id', user.id)
+      .select('blocked')
+      .eq('id', session.user.id)
       .single()
-    if (!profile?.is_admin) {
-      return NextResponse.redirect(new URL('/', request.url))
-    }
-  } else if (isProtectedAppRoute) {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      return NextResponse.redirect(new URL('/', request.url))
+    if (profile?.blocked) {
+      await supabase.auth.signOut()
+      return NextResponse.redirect(new URL('/login?blocked=1', request.url))
     }
   } else if (pathname === '/login' || pathname === '/register' || pathname === '/') {
     // Auth-page redirects: read session from cookie (no network call)

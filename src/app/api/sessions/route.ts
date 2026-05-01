@@ -5,23 +5,24 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 export async function GET() {
   try {
     const authClient = await createClient()
-    const { data: { user } } = await authClient.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 })
+    const { data: { session } } = await authClient.auth.getSession()
+    if (!session?.user) return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 })
+    const userId = session.user.id
 
     const supabase = await createServiceClient()
 
     // Profile
     const { data: profile } = await supabase
       .from('profiles')
-      .select('username, avatar_color, games_played, times_sus, sus_successes, correct_accusations, total_score')
-      .eq('id', user.id)
+      .select('username, avatar_color, games_played, times_sus, sus_successes, correct_accusations, total_score, is_admin')
+      .eq('id', userId)
       .single()
 
     // All room_player rows for this user → get room ids
     const { data: playerRows } = await supabase
       .from('room_players')
       .select('room_id, is_host')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
 
     const roomIds = playerRows?.map(r => r.room_id) ?? []
 
@@ -74,7 +75,7 @@ export async function GET() {
           game_name: room.game_name ?? null,
           status: room.status,
           created_at: room.created_at,
-          is_host: room.host_id === user.id,
+          is_host: room.host_id === userId,
           player_count: countMap[room.id] ?? 0,
         }))
       }
@@ -84,7 +85,7 @@ export async function GET() {
     const { data: historyRows } = await supabase
       .from('game_history')
       .select('id, game_name, player_count, my_score, my_position, is_host, played_at')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .order('played_at', { ascending: false })
       .limit(20)
 

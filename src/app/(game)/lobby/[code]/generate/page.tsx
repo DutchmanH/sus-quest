@@ -42,6 +42,23 @@ function formatContentLabel(value: string | null | undefined): string {
   return value ? (labels[value] ?? value) : '-'
 }
 
+function estimateGenerationDurationMs(roundsTotal?: number | null, contentLevel?: string | null): number {
+  const rounds = roundsTotal ?? 10
+  const baseByRounds: Record<number, number> = {
+    5: 9500,
+    10: 12500,
+    20: 17000,
+  }
+  const base = baseByRounds[rounds] ?? 12500
+  const intensityBoost =
+    contentLevel === 'niemand_veilig'
+      ? 1400
+      : contentLevel === 'blozen'
+        ? 700
+        : 0
+  return base + intensityBoost
+}
+
 export default function GeneratePage({ params }: GeneratePageProps) {
   const { code } = use(params)
   const router = useRouter()
@@ -56,10 +73,58 @@ export default function GeneratePage({ params }: GeneratePageProps) {
   const [showQuickSettings, setShowQuickSettings] = useState(false)
   const [updatingSettings, setUpdatingSettings] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [expandedPreviewSets, setExpandedPreviewSets] = useState<number[]>([])
   const [quickRounds, setQuickRounds] = useState(10)
   const [quickVibe, setQuickVibe] = useState('feest')
   const [quickGroep, setQuickGroep] = useState('vrienden')
   const [quickContent, setQuickContent] = useState('blozen')
+  const [revealedSetSidequests, setRevealedSetSidequests] = useState<number[]>([])
+  const questionsPerCycle = Math.max(1, Number(room?.questions_per_cycle ?? 4))
+  const playCycles = Math.max(1, Number(room?.play_cycles ?? Math.ceil((room?.rounds_total ?? 10) / questionsPerCycle)))
+  const derivedTotalQuestions = questionsPerCycle * playCycles
+  const sortedRounds = [...rounds].sort((a, b) => a.round_number - b.round_number)
+  const roundByNumber = new Map(sortedRounds.map(round => [round.round_number, round]))
+
+  useEffect(() => {
+    setRevealedSetSidequests([])
+  }, [room?.id, room?.play_cycles, room?.questions_per_cycle, rounds.length])
+
+  useEffect(() => {
+    setExpandedPreviewSets([])
+  }, [room?.id, room?.play_cycles, room?.questions_per_cycle, rounds.length])
+
+  function toggleSetReveal(setIndex: number) {
+    setRevealedSetSidequests(prev =>
+      prev.includes(setIndex)
+        ? prev.filter(index => index !== setIndex)
+        : [...prev, setIndex]
+    )
+  }
+
+  function togglePreviewSet(setIndex: number) {
+    setExpandedPreviewSets(prev =>
+      prev.includes(setIndex)
+        ? prev.filter(index => index !== setIndex)
+        : [...prev, setIndex]
+    )
+  }
+
+  const previewSets = Array.from({ length: playCycles }, (_, index) => {
+    const setStartRoundNumber = 2 + index * (questionsPerCycle + 1)
+    const questions = Array.from({ length: questionsPerCycle }, (_, questionIdx) =>
+      roundByNumber.get(setStartRoundNumber + questionIdx)
+    ).filter((round): round is Round => !!round)
+    const sidequestRound = questions.find(question => question.has_sidequest) ?? null
+    return {
+      index,
+      questions,
+      hasSidequest: !!sidequestRound,
+      sidequestRound,
+      accuseGate: roundByNumber.get(setStartRoundNumber + questionsPerCycle) ?? null,
+    }
+  })
+  const playQuestionCount = previewSets.reduce((sum, set) => sum + set.questions.length, 0) || derivedTotalQuestions
+  const nonQuestionCount = playCycles
 
   const loadRounds = useCallback(async () => {
     const [roundsRes, roomRes] = await Promise.all([
@@ -156,7 +221,12 @@ export default function GeneratePage({ params }: GeneratePageProps) {
   }
 
   if (generating) {
-    return <GeneratingLoader />
+    return (
+      <GeneratingLoader
+        language={language}
+        estimatedDurationMs={estimateGenerationDurationMs(derivedTotalQuestions, room?.content_level)}
+      />
+    )
   }
 
   if (expired) {
@@ -243,7 +313,13 @@ export default function GeneratePage({ params }: GeneratePageProps) {
             </p>
             <div className="flex flex-wrap gap-2">
               <span className="px-2.5 py-1 rounded-full text-xs font-mono border border-[var(--border)] text-[var(--text-primary)]">
-                {room.rounds_total} rondes
+                Speelrondes: {playCycles}
+              </span>
+              <span className="px-2.5 py-1 rounded-full text-xs font-mono border border-[var(--border)] text-[var(--text-primary)]">
+                Vragen/ronde: {questionsPerCycle}
+              </span>
+              <span className="px-2.5 py-1 rounded-full text-xs font-mono border border-[var(--border)] text-[var(--text-primary)]">
+                Totaal vragen: {derivedTotalQuestions}
               </span>
               <span className="px-2.5 py-1 rounded-full text-xs font-mono border border-[var(--mint)] text-[var(--mint)]">
                 {formatVibeLabel(room.vibe)}
@@ -260,36 +336,95 @@ export default function GeneratePage({ params }: GeneratePageProps) {
 
         {/* Question list */}
         <div className="flex flex-col gap-3 flex-1 overflow-y-auto">
-          {rounds.map((round) => (
-            <div
-              key={round.id}
-              className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl px-4 py-4"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1">
-                  <span className="text-xs font-mono text-[var(--text-muted)] tracking-widest mb-1 block">
-                    RONDE {round.round_number}
-                  </span>
-                  <p className="text-[var(--text-primary)] font-semibold leading-snug">
-                    {language === 'en' ? round.main_question_en : round.main_question_nl}
-                  </p>
-                </div>
-                {round.has_sidequest && (
-                  <span className="shrink-0 text-xs font-mono tracking-widest border border-[var(--coral)] text-[var(--coral)] px-2 py-0.5 rounded-full mt-1">
-                    SIDEQUEST
-                  </span>
+          <p className="text-xs text-[var(--text-muted)]">
+            {playQuestionCount} vragen verdeeld over {nonQuestionCount} speelsets. Klap per set open.
+          </p>
+
+          {previewSets.map(set => {
+            const isExpanded = expandedPreviewSets.includes(set.index)
+            return (
+              <div
+                key={`set-${set.index}`}
+                className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl px-4 py-4"
+              >
+                <button
+                  onClick={() => togglePreviewSet(set.index)}
+                  className="w-full flex items-center justify-between gap-3 text-left"
+                >
+                  <div>
+                    <p className="text-xs font-mono text-[var(--text-muted)] tracking-widest">
+                      SPEELSET {set.index + 1}
+                    </p>
+                    <p className="text-sm text-[var(--text-muted)]">
+                      {set.questions.length} vraag{set.questions.length === 1 ? '' : 'en'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`shrink-0 text-xs font-mono tracking-widest border px-2 py-0.5 rounded-full ${
+                      set.hasSidequest
+                        ? 'border-[var(--coral)] text-[var(--coral)]'
+                        : 'border-[var(--border)] text-[var(--text-muted)]'
+                    }`}>
+                      {set.hasSidequest ? '1 SIDEQUEST IN DEZE SET' : 'GEEN SIDEQUEST'}
+                    </span>
+                    <span className="text-[var(--mint)] text-xs font-mono tracking-widest">
+                      {isExpanded ? '▼' : '▶'}
+                    </span>
+                  </div>
+                </button>
+
+                {isExpanded && (
+                  <>
+                    <div className="flex flex-col gap-2 mt-3">
+                      {set.questions.map((round, questionIndex) => (
+                        <div key={round.id} className="rounded-xl border border-[var(--border)] px-3 py-2">
+                          <span className="text-[10px] font-mono text-[var(--text-muted)] tracking-widest mb-1 block">
+                            VRAAG {questionIndex + 1}
+                          </span>
+                          <p className="text-[var(--text-primary)] font-semibold leading-snug">
+                            {language === 'en' ? round.main_question_en : round.main_question_nl}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-3 pt-3 border-t border-[var(--border)]">
+                      <button
+                        onClick={() => toggleSetReveal(set.index)}
+                        className="w-full text-left text-xs font-mono tracking-widest text-[var(--mint)] hover:opacity-80 transition-opacity"
+                      >
+                        {revealedSetSidequests.includes(set.index) ? '▼ VERBERG SIDEQUEST' : '▶ TOON SIDEQUEST'}
+                      </button>
+                      {revealedSetSidequests.includes(set.index) && (
+                        <div className="mt-2 rounded-xl border border-[var(--border)] px-3 py-2">
+                          {set.sidequestRound ? (
+                            <>
+                              <p className="text-[10px] font-mono tracking-widest text-[var(--text-muted)] mb-1">
+                                SIDEQUEST OPDRACHT
+                              </p>
+                              <p className="text-sm text-[var(--text-muted)] italic">
+                                {language === 'en' ? set.sidequestRound.sidequest_en : set.sidequestRound.sidequest_nl}
+                              </p>
+                            </>
+                          ) : (
+                            <p className="text-sm text-[var(--text-muted)]">Geen sidequest gevonden voor deze set.</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {set.accuseGate && (
+                      <div className="mt-3 pt-3 border-t border-[var(--border)]">
+                        <p className="text-xs font-mono tracking-widest text-[var(--gold)]">
+                          BESCHULDIG-RONDE NA DEZE SET
+                        </p>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
-              {round.has_sidequest && (
-                <div className="mt-3 pt-3 border-t border-[var(--border)]">
-                  <p className="text-xs font-mono text-[var(--text-muted)] tracking-widest mb-1">SIDEQUEST OPDRACHT</p>
-                  <p className="text-[var(--text-muted)] text-sm italic">
-                    {language === 'en' ? round.sidequest_en : round.sidequest_nl}
-                  </p>
-                </div>
-              )}
-            </div>
-          ))}
+            )
+          })}
         </div>
 
         {/* Actions */}

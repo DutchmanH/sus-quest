@@ -1,14 +1,13 @@
 'use client'
 
 import { use, useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { QRCodeSVG } from 'qrcode.react'
 import { MobileContainer } from '@/components/layout/MobileContainer'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Avatar } from '@/components/ui/Avatar'
 import { PlayerRow } from '@/components/game/PlayerRow'
-import { GeneratingLoader } from '@/components/game/GeneratingLoader'
 import { useRoom } from '@/hooks/useRoom'
 import { generateFunnyGameName } from '@/lib/funny-game-name'
 import { useGameStore } from '@/store/gameStore'
@@ -52,7 +51,8 @@ function formatContentLabel(value: string | null | undefined): string {
 export default function LobbyPage({ params }: LobbyPageProps) {
   const { code } = use(params)
   const router = useRouter()
-  const { playerId } = useGameStore()
+  const searchParams = useSearchParams()
+  const { playerId, playerName, setPlayer } = useGameStore()
   const { room, players, loading, expired } = useRoom(code)
   const [starting, setStarting] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
@@ -63,7 +63,9 @@ export default function LobbyPage({ params }: LobbyPageProps) {
       : false
   )
   const [settingsSaving, setSettingsSaving] = useState(false)
+  const [closingGame, setClosingGame] = useState(false)
   const [settingsError, setSettingsError] = useState<string | null>(null)
+  const [readyError, setReadyError] = useState<string | null>(null)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [gameName, setGameName] = useState('')
   const [readySpark, setReadySpark] = useState(false)
@@ -87,9 +89,15 @@ export default function LobbyPage({ params }: LobbyPageProps) {
     }
   }, [room?.status, code, router])
 
-  const me = players.find(p => p.id === playerId)
+  const fallbackPlayerId = searchParams.get('pid')
+  const fallbackPlayerName = searchParams.get('pname')
+  const fallbackPlayerColor = searchParams.get('pcolor')
+  const effectivePlayerId = playerId ?? fallbackPlayerId
+  const me = players.find(p => p.id === effectivePlayerId)
   const myIcon = me?.avatar_icon ?? (typeof window !== 'undefined' ? (localStorage.getItem('susquest-avatar-icon') ?? DEFAULT_ICON) : DEFAULT_ICON)
   const isHost = me?.is_host ?? false
+  const questionsPerCycle = Math.max(1, Number(room?.questions_per_cycle ?? 4))
+  const playCycles = Math.max(1, Number(room?.play_cycles ?? Math.ceil((room?.rounds_total ?? 10) / questionsPerCycle)))
   const notReadyCount = players.filter(p => !p.is_ready).length
   const canStart = players.length >= 2 && notReadyCount === 0
   const everyoneReady = players.length >= 2 && notReadyCount === 0
@@ -177,6 +185,34 @@ export default function LobbyPage({ params }: LobbyPageProps) {
     if (me?.avatar_icon) localStorage.setItem('susquest-avatar-icon', me.avatar_icon)
   }, [me?.avatar_icon])
 
+  useEffect(() => {
+    if (!fallbackPlayerId) return
+    if (playerId === fallbackPlayerId) return
+    if (fallbackPlayerName && fallbackPlayerColor) {
+      setPlayer(fallbackPlayerId, fallbackPlayerName, fallbackPlayerColor)
+      return
+    }
+    const matchedPlayer = players.find(player => player.id === fallbackPlayerId)
+    if (matchedPlayer) {
+      setPlayer(matchedPlayer.id, matchedPlayer.display_name, matchedPlayer.avatar_color)
+    }
+  }, [fallbackPlayerColor, fallbackPlayerId, fallbackPlayerName, playerId, players, setPlayer])
+
+  useEffect(() => {
+    if (me || !playerName || players.length === 0) return
+    const matchingPlayers = players.filter(player => player.display_name === playerName)
+    if (matchingPlayers.length !== 1) return
+    const matchedPlayer = matchingPlayers[0]
+    setPlayer(matchedPlayer.id, matchedPlayer.display_name, matchedPlayer.avatar_color)
+  }, [me, playerName, players, setPlayer])
+
+  useEffect(() => {
+    if (loading || expired) return
+    if (!room || players.length === 0) return
+    if (me) return
+    router.replace(`/join?code=${encodeURIComponent(code)}`)
+  }, [code, expired, loading, me, players.length, room, router])
+
   function handleShare() {
     if (typeof navigator.share === 'function') {
       navigator.share({ url: joinUrl, title: 'SusQuest — join mijn game!' })
@@ -186,9 +222,19 @@ export default function LobbyPage({ params }: LobbyPageProps) {
   }
 
   async function toggleReady() {
-    if (!playerId || !me) return
-    const supabase = createClient()
-    await supabase.from('room_players').update({ is_ready: !me.is_ready }).eq('id', playerId)
+    if (!me || !room) {
+      setReadyError('Kon je spelerprofiel niet vinden. Refresh of join opnieuw.')
+      return
+    }
+    setReadyError(null)
+    const res = await fetch(`/api/rooms/${code}/ready`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId: me.id }),
+    })
+    if (!res.ok) {
+      setReadyError('Ready status updaten mislukt. Probeer opnieuw.')
+    }
   }
 
   async function startGame() {
@@ -240,14 +286,14 @@ export default function LobbyPage({ params }: LobbyPageProps) {
   }
 
   async function saveEdit() {
-    if (!playerId || !editName.trim()) return
+    if (!effectivePlayerId || !editName.trim()) return
     setEditSaving(true)
     const supabase = createClient()
     await supabase.from('room_players').update({
       display_name: editName.trim(),
       avatar_color: editColor,
       avatar_icon: editIcon,
-    }).eq('id', playerId)
+    }).eq('id', effectivePlayerId)
     localStorage.setItem('susquest-avatar-icon', editIcon)
     setEditOpen(false)
     setEditSaving(false)
@@ -292,10 +338,6 @@ export default function LobbyPage({ params }: LobbyPageProps) {
     )
   }
 
-  if (starting) {
-    return <GeneratingLoader />
-  }
-
   return (
     <MobileContainer>
       <div className="flex flex-col min-h-screen px-5 pt-5">
@@ -335,10 +377,28 @@ export default function LobbyPage({ params }: LobbyPageProps) {
                     )}
                     {isHost && (
                       <button
-                        onClick={() => { setGearOpen(false); router.push('/dashboard') }}
+                        onClick={async () => {
+                          if (closingGame) return
+                          setClosingGame(true)
+                          setSettingsError(null)
+                          setGearOpen(false)
+                          try {
+                            const res = await fetch(`/api/rooms/${code}/close`, { method: 'POST' })
+                            const data = await res.json().catch(() => ({}))
+                            if (!res.ok) {
+                              setSettingsError(data.error ?? 'Spel afsluiten mislukt')
+                              setClosingGame(false)
+                              return
+                            }
+                            router.push('/dashboard')
+                          } catch {
+                            setSettingsError('Spel afsluiten mislukt')
+                            setClosingGame(false)
+                          }
+                        }}
                         className="w-full text-left px-4 py-3 text-sm text-[var(--coral)] hover:bg-[var(--bg-card-hover)] transition-colors border-t border-[var(--border)]"
                       >
-                        Spel afsluiten
+                        {closingGame ? 'Afsluiten…' : 'Spel afsluiten'}
                       </button>
                     )}
                   </div>
@@ -415,6 +475,47 @@ export default function LobbyPage({ params }: LobbyPageProps) {
           </div>
         )}
 
+        {/* CTA boven de spelerslijst */}
+        <div className="pb-4">
+          {isHost && startError && (
+            <p className="text-[var(--coral)] text-sm text-center mb-3">{startError}</p>
+          )}
+          {readyError && (
+            <p className="text-[var(--coral)] text-sm text-center mb-3">{readyError}</p>
+          )}
+          {isHost ? (
+            me?.is_ready ? (
+              <Button variant="mint" fullWidth size="lg" disabled={!canStart || starting} onClick={startGame}>
+                {!canStart ? `Wacht op ${notReadyCount} speler(s)…` : 'Start het spel'}
+              </Button>
+            ) : (
+              <Button variant="dark" fullWidth size="lg" onClick={toggleReady}>
+                Ik ben ready (host) ✓
+              </Button>
+            )
+          ) : (
+            <div>
+              <Button
+                variant={me?.is_ready ? 'dark' : 'mint'}
+                fullWidth
+                size="lg"
+                onClick={toggleReady}
+              >
+                {everyoneReady
+                  ? 'We zijn klaar om te starten'
+                  : me?.is_ready
+                    ? `Ready · wachten op andere spelers${'.'.repeat(waitingDots)}`
+                    : 'Ik ben ready!'}
+              </Button>
+              {everyoneReady && (
+                <p className="text-[10px] font-mono tracking-widest text-[var(--text-muted)] text-center mt-2">
+                  DE HOST MOET HET SPEL STARTEN
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Player list */}
         <div className={`flex flex-col gap-2 relative transition-all duration-300 ${
           everyoneReady ? 'rounded-2xl p-2 bg-[var(--mint)]/5 border border-[var(--mint)]/30 animate-pulse' : ''
@@ -433,11 +534,11 @@ export default function LobbyPage({ params }: LobbyPageProps) {
             <div key={player.id} className="relative">
               <PlayerRow
                 player={player}
-                isMe={player.id === playerId}
-                icon={player.avatar_icon ?? (player.id === playerId ? myIcon : DEFAULT_ICON)}
+                isMe={player.id === effectivePlayerId}
+                icon={player.avatar_icon ?? (player.id === effectivePlayerId ? myIcon : DEFAULT_ICON)}
                 highlightMeRing={!everyoneReady}
-                selectable={player.id === playerId}
-                onSelect={player.id === playerId ? openEdit : undefined}
+                selectable={player.id === effectivePlayerId}
+                onSelect={player.id === effectivePlayerId ? openEdit : undefined}
               />
               {everyoneReady && index < players.length - 1 && (
                 <div className="flex justify-center py-1.5">
@@ -463,33 +564,8 @@ export default function LobbyPage({ params }: LobbyPageProps) {
           </p>
         )}
 
-        {startError && (
-          <p className="text-[var(--coral)] text-sm text-center mb-3">{startError}</p>
-        )}
-
         {/* CTAs */}
-        <div className="py-6">
-          {isHost ? (
-            me?.is_ready ? (
-              <Button variant="mint" fullWidth size="lg" disabled={!canStart || starting} onClick={startGame}>
-                {!canStart ? `Wacht op ${notReadyCount} speler(s)…` : "Let's gooo 🚀"}
-              </Button>
-            ) : (
-              <Button variant="dark" fullWidth size="lg" onClick={toggleReady}>
-                Ik ben ready (host) ✓
-              </Button>
-            )
-          ) : (
-            <Button
-              variant={me?.is_ready ? 'dark' : 'mint'}
-              fullWidth
-              size="lg"
-              onClick={toggleReady}
-            >
-              {me?.is_ready ? '✓ Ready — wacht op host' : 'Ik ben ready!'}
-            </Button>
-          )}
-        </div>
+        <div className="py-6" />
       </div>
 
       {/* Edit-me modal */}
@@ -604,7 +680,15 @@ export default function LobbyPage({ params }: LobbyPageProps) {
               </p>
               <div className="grid grid-cols-2 gap-2 mb-4">
                 <div className="rounded-xl border border-[var(--border)] px-3 py-2">
-                  <p className="text-[10px] font-mono text-[var(--text-muted)] tracking-widest uppercase">Rondes</p>
+                  <p className="text-[10px] font-mono text-[var(--text-muted)] tracking-widest uppercase">Speelrondes</p>
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">{playCycles}</p>
+                </div>
+                <div className="rounded-xl border border-[var(--border)] px-3 py-2">
+                  <p className="text-[10px] font-mono text-[var(--text-muted)] tracking-widest uppercase">Vragen/ronde</p>
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">{questionsPerCycle}</p>
+                </div>
+                <div className="rounded-xl border border-[var(--border)] px-3 py-2">
+                  <p className="text-[10px] font-mono text-[var(--text-muted)] tracking-widest uppercase">Totaal vragen</p>
                   <p className="text-sm font-semibold text-[var(--text-primary)]">{room?.rounds_total ?? '-'}</p>
                 </div>
                 <div className="rounded-xl border border-[var(--border)] px-3 py-2">
@@ -674,6 +758,20 @@ export default function LobbyPage({ params }: LobbyPageProps) {
                 Sluiten
               </button>
             )}
+          </div>
+        </div>
+      )}
+      {starting && (
+        <div className="fixed inset-0 z-[70] bg-[var(--bg-primary)]/92 backdrop-blur-sm flex items-center justify-center px-6">
+          <div className="text-center">
+            <div className="mx-auto mb-4 flex items-center justify-center gap-2">
+              <span className="text-[var(--mint)] text-lg animate-pulse">✦</span>
+              <div className="w-8 h-8 border-2 border-[var(--mint)] border-t-transparent rounded-full animate-spin" />
+              <span className="text-[var(--gold)] text-lg animate-pulse">✦</span>
+            </div>
+            <p className="text-sm font-mono tracking-widest text-[var(--mint)] uppercase">
+              spel wordt gestart...
+            </p>
           </div>
         </div>
       )}

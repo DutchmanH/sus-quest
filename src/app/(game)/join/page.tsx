@@ -42,7 +42,12 @@ function JoinForm() {
       if (icon) localStorage.setItem('susquest-avatar-icon', icon)
       else localStorage.removeItem('susquest-avatar-icon')
       setPlayer(data.player.id, data.player.display_name, data.player.avatar_color)
-      router.push(`/lobby/${data.room.code}`)
+      const lobbyParams = new URLSearchParams({
+        pid: data.player.id,
+        pname: data.player.display_name,
+        pcolor: data.player.avatar_color,
+      })
+      router.push(`/lobby/${data.room.code}?${lobbyParams.toString()}`)
     } catch {
       setError('Joinen mislukt')
     } finally {

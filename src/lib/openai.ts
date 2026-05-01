@@ -27,6 +27,25 @@ const BOLDNESS_CONTEXT: Record<string, string> = {
   niemand_veilig: 'Content: volledig ongecensureerd voor volwassenen. Bold sidequests, expliciete maar grappige inhoud. De groep is gewaarschuwd. Niemand is veilig.',
 }
 
+const GENERATION_MODEL = 'gpt-4o'
+const INPUT_COST_PER_1M_TOKENS_USD = 5
+const OUTPUT_COST_PER_1M_TOKENS_USD = 15
+
+export interface GenerationUsage {
+  model: string
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+  inputCostUsd: number
+  outputCostUsd: number
+  totalCostUsd: number
+}
+
+export interface GenerateRoundsResult {
+  rounds: GeneratedRound[]
+  usage: GenerationUsage
+}
+
 export async function generateRounds(
   roundCount: number,
   setting: string,
@@ -34,7 +53,7 @@ export async function generateRounds(
   playerCount: number,
   groep?: string,
   seasonalContext?: SeasonalPromptContext | null
-): Promise<GeneratedRound[]> {
+): Promise<GenerateRoundsResult> {
   const settingCtx = SETTING_CONTEXT[setting] ?? SETTING_CONTEXT['feest']
   const groepCtx = groep ? (GROEP_CONTEXT[groep] ?? GROEP_CONTEXT['vrienden']) : GROEP_CONTEXT['vrienden']
   const boldnessCtx = BOLDNESS_CONTEXT[boldness] ?? BOLDNESS_CONTEXT['blozen']
@@ -50,7 +69,7 @@ export async function generateRounds(
 
   const openai = getOpenAI()
   const completion = await openai.chat.completions.create({
-    model: 'gpt-4o',
+    model: GENERATION_MODEL,
     messages: [{ role: 'user', content: prompt }],
     temperature: 0.9,
     response_format: { type: 'json_object' },
@@ -69,7 +88,26 @@ export async function generateRounds(
     throw new Error(`OpenAI returned invalid rounds: ${raw}`)
   }
 
-  return parsed.rounds
+  const promptTokens = completion.usage?.prompt_tokens ?? 0
+  const completionTokens = completion.usage?.completion_tokens ?? 0
+  const totalTokens = completion.usage?.total_tokens ?? promptTokens + completionTokens
+
+  const inputCostUsd = (promptTokens / 1_000_000) * INPUT_COST_PER_1M_TOKENS_USD
+  const outputCostUsd = (completionTokens / 1_000_000) * OUTPUT_COST_PER_1M_TOKENS_USD
+  const totalCostUsd = inputCostUsd + outputCostUsd
+
+  return {
+    rounds: parsed.rounds,
+    usage: {
+      model: GENERATION_MODEL,
+      promptTokens,
+      completionTokens,
+      totalTokens,
+      inputCostUsd,
+      outputCostUsd,
+      totalCostUsd,
+    },
+  }
 }
 
 export function buildRoundsPrompt(input: {
@@ -96,12 +134,20 @@ CONTEXT OVER DEZE GROEP:
 ${seasonalBlock}
 
 SPELREGELS:
-- Ongeveer 60-70% van de rondes heeft een echte sidequest (hasSidequest: true)
-- Bij een sidequest: playerIndex is een getal van 0 tot ${input.playerCount - 1}
+- Het spel werkt in sets: aan het begin van een set krijgt precies 1 speler een sidequest, daarna volgt een beschuldigmoment.
+- Daarom moet ELKE gegenereerde speelvraag een bruikbare sidequest-tekst bevatten die ook in latere vragen van dezelfde set logisch blijft.
+- Zet hasSidequest voor output-compatibiliteit op true en vul sidequest altijd in.
+- Bij sidequest: playerIndex is een getal van 0 tot ${input.playerCount - 1}
 - Opdrachten zijn KORT en DIRECT — max 2 zinnen, geen uitleg, geen als/dan constructies
 - mainQuestion stelt een vraag aan de hele groep: over gedrag, keuzes, persoonlijkheid of sociale dynamiek. De vraag moet iets onthullen over wie iemand echt is.
-- sidequest is een geheime persoonlijke opdracht voor ÉÉN speler. Die speler moet dit ongemerkt uitvoeren tijdens het beantwoorden van de hoofdvraag. Subtiel of afleidend, maar uitvoerbaar.
-- fakeTask is wat de ANDERE spelers zien op hun kaart (als er een sidequest is). Dit is GEEN opdracht — het is een grappig, ironisch of licht uitdagend feitje of observatie dat past bij de vraag. Voorbeelden: "Wacht even... is iedereen hier eigenlijk wel te vertrouwen?", "Feit: mensen die te hard lachen zijn altijd verdacht.", "Kleine uitdaging: kijk de persoon rechts van je 3 seconden recht in de ogen." Houd het kort, grappig, en niet verdacht.
+- sidequest is een geheime persoonlijke opdracht voor ÉÉN speler. Die speler moet dit ongemerkt uitvoeren tijdens het beantwoorden van de hoofdvraag.
+- Sidequests moeten ALTIJD CONCREET, OBSERVEERBAAR en UITVOERBAAR zijn binnen 20-60 seconden.
+- Gebruik expliciete acties met meetbare details (aantal, kant, timing, doelwit). Vermijd vage formuleringen.
+- VERBODEN sidequest-stijl: "wees verdacht", "doe iets opvallends", "gedraag je raar", "probeer subtiel te zijn", "maak het ongemakkelijk".
+- VERPLICHTE sidequest-stijl: micro-acties zoals "krab 3x aan je linker oor", "knipoog 2x naar speler links", "zeg 2 keer exact hetzelfde stopwoord", "raak je glas 3x aan zonder te drinken", "vraag 2 verschillende spelers of ze je vertrouwen", "zet binnen 30 sec een pet/hoed op (als aanwezig)".
+- Schrijf sidequests als een heldere imperatief in 1 zin. Geen meta-uitleg, geen contextuitleg.
+- Sidequests moeten grappig zijn voor een drankspel: sociaal, licht awkward, een beetje ondeugend, maar haalbaar en veilig.
+- fakeTask is wat de ANDERE spelers zien op hun kaart. Dit is GEEN opdracht — het is een grappig, ironisch of licht uitdagend feitje of observatie dat past bij de vraag. Voorbeelden: "Wacht even... is iedereen hier eigenlijk wel te vertrouwen?", "Feit: mensen die te hard lachen zijn altijd verdacht.", "Kleine uitdaging: kijk de persoon rechts van je 3 seconden recht in de ogen." Houd het kort, grappig, en niet verdacht.
 - Toon: speels, licht sarcastisch, mysterieus — denk detective-vibe met een vleugje chaos
 - Pas de content aan op de bovenstaande context. Maak de vragen specifiek voor deze setting en groep, niet generiek.
 - Geef ALTIJD zowel Nederlandse (nl) als Engelse (en) versies
@@ -121,5 +167,5 @@ Antwoord als JSON object met een "rounds" array, geen uitleg, geen markdown:
   ]
 }
 
-Bij hasSidequest: false, laat het sidequest veld volledig weg.`
+Het sidequest veld is verplicht en mag nooit leeg zijn.`
 }

@@ -20,6 +20,8 @@ export async function POST(request: NextRequest) {
 
   // Read optional settings from body
   let rounds_total = 10
+  let play_cycles = 3
+  let questions_per_cycle = 4
   let vibe = 'feest'
   let content_level = 'blozen'
   let groep = 'vrienden'
@@ -29,6 +31,8 @@ export async function POST(request: NextRequest) {
   let seasonal_source: string = 'none'
   try {
     const body = await request.json()
+    if (body.play_cycles) play_cycles = body.play_cycles
+    if (body.questions_per_cycle) questions_per_cycle = body.questions_per_cycle
     if (body.rounds_total) rounds_total = body.rounds_total
     if (body.vibe) vibe = body.vibe
     if (body.content_level) content_level = body.content_level
@@ -43,6 +47,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Ongeldig seasonal theme' }, { status: 400 })
     }
   } catch { /* no body is fine */ }
+
+  play_cycles = Number.isFinite(play_cycles) ? Math.max(1, Math.min(10, Math.floor(play_cycles))) : 3
+  questions_per_cycle = Number.isFinite(questions_per_cycle) ? Math.max(1, Math.min(10, Math.floor(questions_per_cycle))) : 4
+  const derivedTotalQuestions = play_cycles * questions_per_cycle
+  const allowedRounds = [5, 10, 20]
+  const nearestAllowedRounds = allowedRounds.reduce((best, candidate) =>
+    Math.abs(candidate - derivedTotalQuestions) < Math.abs(best - derivedTotalQuestions) ? candidate : best
+  , allowedRounds[0])
+  rounds_total = nearestAllowedRounds
 
   // Ensure profile exists (trigger may have failed on registration)
   let { data: profile } = await supabase
@@ -76,11 +89,60 @@ export async function POST(request: NextRequest) {
   }
 
   // Create room
-  const { data: room, error: roomError } = await supabase
+  let room: { id: string; code: string } | null = null
+  let roomError: { message?: string } | null = null
+
+  const insertPayload = {
+    code,
+    game_name,
+    host_id: user.id,
+    rounds_total,
+    play_cycles,
+    questions_per_cycle,
+    vibe,
+    content_level,
+    groep,
+    seasonal_theme,
+    seasonal_source,
+  }
+
+  const insertWithNewColumns = await supabase
     .from('rooms')
-    .insert({ code, game_name, host_id: user.id, rounds_total, vibe, content_level, groep, seasonal_theme, seasonal_source })
+    .insert(insertPayload)
     .select()
     .single()
+
+  if (insertWithNewColumns.error) {
+    const message = insertWithNewColumns.error.message ?? ''
+    const missingColumns =
+      message.includes('play_cycles') ||
+      message.includes('questions_per_cycle') ||
+      message.includes('column')
+
+    if (missingColumns) {
+      const fallbackInsert = await supabase
+        .from('rooms')
+        .insert({
+          code,
+          game_name,
+          host_id: user.id,
+          rounds_total,
+          vibe,
+          content_level,
+          groep,
+          seasonal_theme,
+          seasonal_source,
+        })
+        .select()
+        .single()
+      room = fallbackInsert.data as { id: string; code: string } | null
+      roomError = fallbackInsert.error
+    } else {
+      roomError = insertWithNewColumns.error
+    }
+  } else {
+    room = insertWithNewColumns.data as { id: string; code: string } | null
+  }
 
   if (roomError) {
     console.error('Room insert error:', roomError)

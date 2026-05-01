@@ -14,7 +14,7 @@ export async function POST(
   const supabase = await createServiceClient()
   const { data: room, error: roomError } = await supabase
     .from('rooms')
-    .select('id, host_id, status, current_round, rounds_total')
+    .select('*')
     .eq('code', code.toUpperCase())
     .single()
 
@@ -31,9 +31,18 @@ export async function POST(
     .eq('round_number', room.current_round)
     .maybeSingle()
 
+  const questionsPerCycle = Math.max(1, Number(room.questions_per_cycle ?? 4))
+  const playCycles = Math.max(1, Number(room.play_cycles ?? Math.ceil((room.rounds_total ?? 10) / questionsPerCycle)))
+  const totalRoundRows = 1 + playCycles * (questionsPerCycle + 1)
+  const isGateRound = (roundNumber: number) => {
+    if (roundNumber <= 1) return false
+    const indexAfterIntro = roundNumber - 2
+    return indexAfterIntro % (questionsPerCycle + 1) === questionsPerCycle
+  }
+
   const nextRoundNum = room.current_round + 1
 
-  if (nextRoundNum > room.rounds_total) {
+  if (nextRoundNum > totalRoundRows) {
     const updates: PromiseLike<unknown>[] = [
       supabase.from('rooms').update({ status: 'finished' }).eq('id', room.id),
     ]
@@ -60,7 +69,7 @@ export async function POST(
   }
 
   const updates: PromiseLike<unknown>[] = [
-    supabase.from('rounds').update({ status: 'active' }).eq('id', nextRound.id),
+    supabase.from('rounds').update({ status: isGateRound(nextRoundNum) ? 'accuse' : 'active' }).eq('id', nextRound.id),
     supabase.from('rooms').update({ current_round: nextRoundNum, status: 'playing' }).eq('id', room.id),
   ]
   if (currentRound?.id) {

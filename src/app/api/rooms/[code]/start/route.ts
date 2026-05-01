@@ -38,19 +38,37 @@ export async function POST(
   }
 
   const { data: rounds, error: roundsError } = await supabase
-    .from('rounds').select('id, has_sidequest').eq('room_id', room.id).order('round_number')
+    .from('rounds').select('id, round_number').eq('room_id', room.id).order('round_number')
 
   if (roundsError || !rounds?.length) {
     return NextResponse.json({ error: 'Geen vragen gevonden — genereer eerst vragen' }, { status: 400 })
   }
 
   const playerIds = players.map(p => p.id)
-  const sidequestAssignments = rounds.map(round => ({
-    id: round.id,
-    sidequest_player_id: round.has_sidequest
-      ? playerIds[Math.floor(Math.random() * playerIds.length)]
-      : null,
-  }))
+  const questionsPerCycle = Math.max(1, Number(room.questions_per_cycle ?? 4))
+  const isGateRound = (roundNumber: number) => {
+    if (roundNumber <= 1) return false
+    const indexAfterIntro = roundNumber - 2
+    return indexAfterIntro % (questionsPerCycle + 1) === questionsPerCycle
+  }
+
+  let cycleSidequestPlayerId: string | null = null
+  const sidequestAssignments = rounds.map(round => {
+    if (round.round_number === 1) {
+      cycleSidequestPlayerId = playerIds[Math.floor(Math.random() * playerIds.length)]
+      return { id: round.id, sidequest_player_id: cycleSidequestPlayerId }
+    }
+
+    if (isGateRound(round.round_number)) {
+      cycleSidequestPlayerId = null
+      return { id: round.id, sidequest_player_id: null }
+    }
+
+    if (!cycleSidequestPlayerId) {
+      cycleSidequestPlayerId = playerIds[Math.floor(Math.random() * playerIds.length)]
+    }
+    return { id: round.id, sidequest_player_id: cycleSidequestPlayerId }
+  })
   const firstRound = rounds[0]
 
   const assignmentUpdates = sidequestAssignments.map((assignment) =>

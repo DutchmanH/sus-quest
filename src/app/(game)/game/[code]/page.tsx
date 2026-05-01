@@ -1,6 +1,6 @@
 'use client'
 
-import { use, useEffect, useState } from 'react'
+import { use, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { MobileContainer } from '@/components/layout/MobileContainer'
 import { Button } from '@/components/ui/Button'
@@ -22,11 +22,16 @@ export default function GamePage({ params }: GamePageProps) {
   const [closingGame, setClosingGame] = useState(false)
   const [returningLobby, setReturningLobby] = useState(false)
   const [movingNextRound, setMovingNextRound] = useState(false)
+  const [movingPrevRound, setMovingPrevRound] = useState(false)
   const [cardFlipped, setCardFlipped] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isAuthHost, setIsAuthHost] = useState(false)
   const [closeError, setCloseError] = useState<string | null>(null)
   const [nextRoundError, setNextRoundError] = useState<string | null>(null)
+  const [animatedQuestion, setAnimatedQuestion] = useState<string | null>(null)
+  const [questionAnimPhase, setQuestionAnimPhase] = useState<'idle' | 'out' | 'in' | 'settle'>('idle')
+  const previousRoundIdRef = useRef<string | null>(null)
+  const animationTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([])
 
   useEffect(() => {
     const supabase = createClient()
@@ -50,6 +55,62 @@ export default function GamePage({ params }: GamePageProps) {
       router.push(`/game/${code}/reveal`)
     }
   }, [room?.status, currentRound, code, router])
+
+  const question = currentRound
+    ? (language === 'en' ? currentRound.main_question_en : currentRound.main_question_nl)
+    : null
+
+  useEffect(() => {
+    if (!question) return
+    if (!animatedQuestion) {
+      setAnimatedQuestion(question)
+      return
+    }
+    if (animatedQuestion !== question) {
+      setAnimatedQuestion(question)
+    }
+  }, [question, animatedQuestion])
+
+  useEffect(() => {
+    if (!currentRound?.id || !question) return
+
+    const previousRoundId = previousRoundIdRef.current
+    previousRoundIdRef.current = currentRound.id
+
+    if (!previousRoundId || previousRoundId === currentRound.id) return
+
+    animationTimeoutsRef.current.forEach(clearTimeout)
+    animationTimeoutsRef.current = []
+
+    setQuestionAnimPhase('out')
+
+    const swapTimer = setTimeout(() => {
+      setAnimatedQuestion(question)
+      setQuestionAnimPhase('in')
+    }, 220)
+
+    const settleTimer = setTimeout(() => {
+      setQuestionAnimPhase('settle')
+    }, 420)
+
+    const resetTimer = setTimeout(() => {
+      setQuestionAnimPhase('idle')
+    }, 560)
+
+    animationTimeoutsRef.current.push(swapTimer, settleTimer, resetTimer)
+  }, [currentRound?.id, question])
+
+  useEffect(() => {
+    return () => {
+      animationTimeoutsRef.current.forEach(clearTimeout)
+      animationTimeoutsRef.current = []
+    }
+  }, [])
+
+  useEffect(() => {
+    // Start every round with the private card hidden.
+    setCardFlipped(false)
+  }, [currentRound?.id])
 
   if (expired || (room?.status === 'finished' && room?.current_round <= 1)) {
     return (
@@ -109,11 +170,25 @@ export default function GamePage({ params }: GamePageProps) {
     )
   }
 
-  const question = language === 'en' ? currentRound.main_question_en : currentRound.main_question_nl
+  const questionText = question ?? ''
   const me = players.find(p => p.id === playerId)
   const isHost = (me?.is_host ?? false) || isAuthHost
   const myScore = me?.score ?? 0
   const susFlagCount = 0 // from accusations count
+  const questionsPerCycle = Math.max(1, Number(room.questions_per_cycle ?? 4))
+  const playCycles = Math.max(1, Number(room.play_cycles ?? Math.ceil((room.rounds_total ?? 10) / questionsPerCycle)))
+  const derivedTotalQuestions = questionsPerCycle * playCycles
+  const isIntroRound = room.current_round === 1
+  const indexAfterIntro = Math.max(0, room.current_round - 2)
+  const isGateRound = !isIntroRound && indexAfterIntro % (questionsPerCycle + 1) === questionsPerCycle
+  const completedBlocks = isIntroRound ? 0 : Math.floor(indexAfterIntro / (questionsPerCycle + 1))
+  const positionInBlock = isIntroRound ? 0 : indexAfterIntro % (questionsPerCycle + 1)
+  const isCycleStartRound = !isIntroRound && !isGateRound && positionInBlock === 0 && completedBlocks > 0
+  const isSidequestFocusRound = isIntroRound || isCycleStartRound
+  const currentQuestionNumber = isIntroRound
+    ? 0
+    : Math.min(derivedTotalQuestions, completedBlocks * questionsPerCycle + Math.min(positionInBlock + 1, questionsPerCycle))
+  const progressRatio = derivedTotalQuestions > 0 ? currentQuestionNumber / derivedTotalQuestions : 0
   const isSus = currentRound.sidequest_player_id === playerId
   const hasSidequest = currentRound.has_sidequest
   const cardText = isSus
@@ -129,13 +204,10 @@ export default function GamePage({ params }: GamePageProps) {
     setClosingGame(true)
     setCloseError(null)
     try {
-      const supabase = createClient()
-      const { error } = await supabase
-        .from('rooms')
-        .update({ status: 'finished' })
-        .eq('id', room.id)
-      if (error) {
-        setCloseError('Afsluiten mislukt')
+      const res = await fetch(`/api/rooms/${code}/close`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setCloseError(data.error ?? 'Afsluiten mislukt')
         setClosingGame(false)
         return
       }
@@ -212,13 +284,40 @@ export default function GamePage({ params }: GamePageProps) {
     setMovingNextRound(false)
   }
 
+  async function moveToPreviousRoundDirectly() {
+    if (!room || !currentRound || !isHost || movingPrevRound || room.current_round <= 1) return
+    setMovingPrevRound(true)
+    setNextRoundError(null)
+
+    try {
+      const res = await fetch(`/api/rooms/${code}/previous`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setNextRoundError(data.error ?? 'Vorige vraag openen mislukt')
+        setMovingPrevRound(false)
+        return
+      }
+      router.push(`/game/${code}`)
+    } catch {
+      setNextRoundError('Vorige vraag openen mislukt')
+      setMovingPrevRound(false)
+      return
+    }
+
+    setMovingPrevRound(false)
+  }
+
   return (
     <MobileContainer>
-      <div className="flex flex-col min-h-screen px-5 pt-5">
+      <div className="flex flex-col h-screen overflow-hidden px-5 pt-4">
         {/* Status bar */}
         <div className="flex items-center justify-between mb-4">
           <span className="px-3 py-1 rounded-full text-xs font-mono tracking-widest border border-[var(--mint)] text-[var(--mint)]">
-            RONDE {room.current_round}/{room.rounds_total}
+            {isIntroRound
+              ? 'RONDE 1 · INTRO'
+              : isCycleStartRound
+                ? 'NIEUWE SET · CHECK JE KAART'
+                : `VRAAG ${currentQuestionNumber}/${derivedTotalQuestions}`}
           </span>
           <div className="flex gap-2 items-center">
             <span className="text-[10px] font-mono tracking-widest text-[var(--text-muted)] uppercase">
@@ -272,19 +371,74 @@ export default function GamePage({ params }: GamePageProps) {
         <div className="w-full h-1 bg-[var(--bg-card)] rounded-full mb-6 overflow-hidden">
           <div
             className="h-full bg-[var(--mint)] rounded-full transition-all duration-500"
-            style={{ width: `${(room.current_round / room.rounds_total) * 100}%` }}
+            style={{ width: `${progressRatio * 100}%` }}
           />
         </div>
 
         {/* Main question */}
-        <div className="flex-1">
-          <p className="text-xs font-mono tracking-widest text-[var(--mint)] mb-3">✦ MAIN QUESTION</p>
-          <h2 className="text-3xl font-bold leading-tight text-[var(--text-primary)] mb-4">
-            {question}
-          </h2>
+        <div className={`flex-1 min-h-0 ${isSidequestFocusRound ? 'flex flex-col' : ''}`}>
+          {!isSidequestFocusRound && (
+            <>
+              <p className="text-xs font-mono tracking-widest text-[var(--mint)] mb-3">✦ MAIN QUESTION</p>
+              <div className="mb-4 min-h-[96px] relative overflow-hidden rounded-2xl">
+                <h2
+                  className="text-3xl font-bold leading-tight text-[var(--text-primary)]"
+                  style={{
+                    transform:
+                      questionAnimPhase === 'out'
+                        ? 'translateY(-26px) scale(0.98)'
+                        : questionAnimPhase === 'in'
+                          ? 'translateY(18px) scale(0.985)'
+                          : questionAnimPhase === 'settle'
+                            ? 'translateY(-3px) scale(1.01)'
+                            : 'translateY(0) scale(1)',
+                    opacity:
+                      questionAnimPhase === 'out'
+                        ? 0
+                        : questionAnimPhase === 'in'
+                          ? 0.9
+                          : 1,
+                    transition: 'transform 220ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease',
+                    willChange: 'transform, opacity',
+                  }}
+                >
+                  {animatedQuestion ?? questionText}
+                </h2>
+              </div>
+            </>
+          )}
+          {isSidequestFocusRound && (
+            <div className="mb-4">
+              <p className="text-xs font-mono tracking-widest text-[var(--mint)] mb-2 uppercase">
+                {isIntroRound ? 'Ronde 1 · Intro' : 'Nieuwe set · Sidequest check'}
+              </p>
+              <h2 className="text-3xl font-bold leading-tight text-[var(--text-primary)]">
+                {isIntroRound ? 'Check eerst je kaart: heb jij een sidequest?' : 'Nieuwe set: check opnieuw je geheime kaart.'}
+              </h2>
+              <p className="text-sm text-[var(--text-muted)] mt-2">
+                Draai je priv kaart om, lees stil je opdracht en houd die geheim.
+              </p>
+            </div>
+          )}
 
-          <div className="mt-4">
-            <div className="relative w-full h-52" style={{ perspective: '1200px' }}>
+          <div className={`mt-4 ${isSidequestFocusRound ? 'flex-1 min-h-0' : ''}`}>
+            <div
+              className={`relative w-full ${isSidequestFocusRound ? 'h-full min-h-[280px]' : 'h-44'}`}
+              style={{
+                perspective: '1200px',
+                transform:
+                  questionAnimPhase === 'out'
+                    ? 'translateY(18px) scale(0.985)'
+                    : questionAnimPhase === 'in'
+                      ? 'translateY(-14px) scale(0.99)'
+                      : questionAnimPhase === 'settle'
+                        ? 'translateY(2px) scale(1.005)'
+                        : 'translateY(0) scale(1)',
+                opacity: questionAnimPhase === 'out' ? 0.88 : 1,
+                transition: 'transform 220ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease',
+                willChange: 'transform, opacity',
+              }}
+            >
               <button
                 onClick={() => setCardFlipped(v => !v)}
                 className="relative w-full h-full rounded-2xl"
@@ -301,9 +455,9 @@ export default function GamePage({ params }: GamePageProps) {
                 >
                   <p className="text-[10px] font-mono tracking-widest text-[var(--text-muted)]">PRIVE KAART</p>
                   <p className="text-xl font-bold leading-tight text-[var(--text-primary)]">
-                    tap om je kaart
+                    {isSidequestFocusRound ? 'check of jij de' : 'tap om je kaart'}
                     <br />
-                    te bekijken
+                    {isSidequestFocusRound ? 'sidequest hebt' : 'te bekijken'}
                   </p>
                   <p className="text-xs text-[var(--text-muted)]">lees snel en draai daarna terug.</p>
                 </div>
@@ -314,7 +468,9 @@ export default function GamePage({ params }: GamePageProps) {
                   <p className="text-[10px] font-mono tracking-widest text-[var(--text-muted)]">
                     {isSus ? 'GEHEIME MISSIE' : hasSidequest ? 'JOUW KAART' : 'FUN KAART'}
                   </p>
-                  <p className="text-[var(--text-primary)] text-lg font-semibold leading-snug">{cardText}</p>
+                  <p className="text-[var(--text-primary)] text-lg font-semibold leading-snug">
+                    {cardText}
+                  </p>
                   <p className="text-xs text-[var(--text-muted)]">
                     {isSus ? 'act normal. niemand mag dit zien.' : 'iemand speelt niet eerlijk. let goed op.'}
                   </p>
@@ -326,9 +482,20 @@ export default function GamePage({ params }: GamePageProps) {
         </div>
 
         {/* Action buttons */}
-        <div className="pt-4 pb-6 flex flex-col gap-2">
+        <div className="pt-3 pb-4 flex flex-col gap-2 shrink-0">
           {nextRoundError && (
             <p className="text-[var(--coral)] text-xs font-mono text-center mb-2">{nextRoundError}</p>
+          )}
+          {isHost && (
+            <Button
+              variant="dark"
+              size="md"
+              fullWidth
+              onClick={moveToPreviousRoundDirectly}
+              disabled={movingPrevRound || room.current_round <= 1}
+            >
+              {movingPrevRound ? 'Vorige vraag laden…' : '← Vorige vraag'}
+            </Button>
           )}
           {isHost && (
             <Button
@@ -338,22 +505,24 @@ export default function GamePage({ params }: GamePageProps) {
               onClick={moveToNextRoundDirectly}
               disabled={movingNextRound}
             >
-              {movingNextRound ? 'Volgende vraag starten…' : 'Volgende vraag →'}
+              {movingNextRound ? 'Doorgaan…' : isIntroRound ? 'Start vragenronde →' : 'Volgende vraag →'}
             </Button>
           )}
-          <Button
-            variant="dark"
-            size="md"
-            fullWidth
-            className="bg-[#60A5FA] text-[var(--bg-primary)] border-none hover:opacity-90"
-            onClick={() => router.push(`/game/${code}/accuse`)}
-          >
-            {isHost ? '⚑ Start beschuldigingsfase' : '⚑ Ik verdenk iemand'}
-          </Button>
+          {isGateRound && (
+            <Button
+              variant="dark"
+              size="md"
+              fullWidth
+              className="bg-[#60A5FA] text-[var(--bg-primary)] border-none hover:opacity-90"
+              onClick={() => router.push(`/game/${code}/accuse`)}
+            >
+              {isHost ? '⚑ Open beschuldigingsfase' : '⚑ Naar beschuldigen'}
+            </Button>
+          )}
         </div>
 
         {/* Players */}
-        <div className="mt-2">
+        <div className="mt-2 pb-3 shrink-0">
           <p className="text-xs font-mono tracking-widest text-[var(--text-muted)] mb-3">● AT THE TABLE</p>
           <PlayerStrip players={players} />
         </div>

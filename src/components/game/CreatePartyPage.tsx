@@ -6,7 +6,7 @@ import { MobileContainer } from '@/components/layout/MobileContainer'
 import { Button } from '@/components/ui/Button'
 import { DEFAULT_ICON } from '@/lib/avatars'
 import { generateFunnyGameName } from '@/lib/funny-game-name'
-import { getSeasonalHint } from '@/lib/seasonal-events'
+import { getSeasonalHint, type SeasonalHint } from '@/lib/seasonal-events'
 import { useGameStore } from '@/store/gameStore'
 import type { Setting, Groep, Boldness, SeasonalTheme } from '@/types'
 
@@ -38,25 +38,41 @@ const SEASONAL_THEME_OPTIONS: { value: SeasonalTheme; emoji: string; label: stri
   { value: 'carnaval', emoji: '🎭', label: 'Carnaval', sub: 'verkleed, uitbundig, beetje fout' },
 ]
 
-const STEP_LABELS = ['MODE', 'LOCATIE', 'GROEP', 'INTENSITEIT', 'THEMA', 'RONDES', 'GAME NAAM']
+// TEMP demo override: keep null for normal calendar auto-detection.
+const FORCE_SEASONAL_HINT_FOR_DEMO: SeasonalTheme | null = null
+
+function getForcedSeasonalHint(theme: SeasonalTheme): SeasonalHint {
+  const option = SEASONAL_THEME_OPTIONS.find(item => item.value === theme)
+  return {
+    key: theme,
+    emoji: option?.emoji ?? '🎉',
+    label: option?.label ?? theme,
+    message: 'Vandaag automatisch herkend — dit thema past perfect bij de sfeer en is extra leuk om te kiezen.',
+  }
+}
+
+const STEP_LABELS = ['MODE', 'LOCATIE', 'GROEP', 'INTENSITEIT', 'THEMA', 'SPEELRONDES', 'GAME NAAM']
 const TOTAL_STEPS = 7
 
 export function CreatePartyPage() {
   const router = useRouter()
-  const { setPlayer } = useGameStore()
+  const { setPlayer, language } = useGameStore()
   const [step, setStep] = useState(1)
+  const seasonalHint = FORCE_SEASONAL_HINT_FOR_DEMO
+    ? getForcedSeasonalHint(FORCE_SEASONAL_HINT_FOR_DEMO)
+    : getSeasonalHint()
 
   const [mode, setMode]       = useState<'multiplayer' | 'single_device'>('multiplayer')
   const [setting, setSetting] = useState<Setting>('feest')
   const [groep, setGroep]     = useState<Groep>('vrienden')
   const [boldness, setBoldness] = useState<Boldness>('blozen')
-  const [seasonalTheme, setSeasonalTheme] = useState<SeasonalTheme | null>(null)
-  const [rounds, setRounds]   = useState<5 | 10 | 20>(10)
-  const [gameName, setGameName] = useState(() => generateFunnyGameName())
+  const [seasonalTheme, setSeasonalTheme] = useState<SeasonalTheme | null>(seasonalHint?.key ?? null)
+  const [playCycles, setPlayCycles] = useState<2 | 3 | 4>(3)
+  const [questionsPerCycle, setQuestionsPerCycle] = useState<3 | 4 | 5>(4)
+  const [gameName, setGameName] = useState(() => generateFunnyGameName(language))
 
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState<string | null>(null)
-  const seasonalHint = getSeasonalHint()
 
   function prev() { setError(null); setStep(s => Math.max(1, s - 1)) }
   function next() { setStep(s => Math.min(TOTAL_STEPS, s + 1)) }
@@ -73,7 +89,9 @@ export function CreatePartyPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          rounds_total: rounds,
+          rounds_total: playCycles * questionsPerCycle,
+          play_cycles: playCycles,
+          questions_per_cycle: questionsPerCycle,
           vibe: setting,
           content_level: boldness,
           groep,
@@ -104,23 +122,8 @@ export function CreatePartyPage() {
     <MobileContainer>
       <div className="flex flex-col min-h-screen px-5 pt-5">
 
-        {/* Back + progress */}
+        {/* Progress */}
         <div className="flex items-center gap-4 mb-6">
-          {step === 1 ? (
-            <button
-              onClick={() => router.push('/dashboard')}
-              className="text-[var(--text-muted)] text-sm hover:text-[var(--text-primary)] transition-colors shrink-0"
-            >
-              ←
-            </button>
-          ) : (
-            <button
-              onClick={prev}
-              className="text-[var(--text-muted)] text-sm hover:text-[var(--text-primary)] transition-colors shrink-0"
-            >
-              ←
-            </button>
-          )}
           <div className="flex gap-1.5 flex-1">
             {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
               <div
@@ -132,13 +135,6 @@ export function CreatePartyPage() {
           </div>
           <span className="text-[10px] font-mono tracking-widest text-[var(--text-muted)] shrink-0">
             {step}/{TOTAL_STEPS}
-          </span>
-        </div>
-
-        {/* Step label */}
-        <div className="mb-6">
-          <span className="inline-block px-3 py-1 rounded-full text-[10px] font-mono font-bold tracking-widest bg-[var(--coral)] text-[var(--bg-primary)]">
-            {STEP_LABELS[step - 1]}
           </span>
         </div>
 
@@ -322,69 +318,81 @@ export function CreatePartyPage() {
               </h1>
             </div>
 
-            {seasonalHint && (
-              <button
-                onClick={() => setSeasonalTheme(seasonalHint.key)}
-                className="w-full text-left mb-5 rounded-2xl px-4 py-4 border transition-all"
-                style={{
-                  background: 'rgba(93,237,212,0.06)',
-                  borderColor: 'rgba(93,237,212,0.3)',
-                }}
-              >
-                <div className="flex items-start gap-3">
-                  <span className="text-2xl shrink-0 mt-0.5">{seasonalHint.emoji}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-mono tracking-widest text-[var(--mint)] mb-1 uppercase">
-                      Psst — wij zien het ook
-                    </p>
-                    <p className="text-sm font-semibold text-[var(--text-primary)] leading-snug">
-                      {seasonalHint.message}
-                    </p>
-                    <p className="text-xs text-[var(--text-muted)] mt-1">
-                      Tik om direct te kiezen ↓
-                    </p>
-                  </div>
-                </div>
-              </button>
-            )}
             <div className="flex flex-col gap-3 flex-1">
-              <button
-                onClick={() => setSeasonalTheme(null)}
-                className={`flex items-center gap-5 p-5 rounded-3xl border text-left transition-all ${
-                  seasonalTheme === null
-                    ? 'border-[var(--mint)] bg-[var(--mint)]/10'
-                    : 'border-[var(--border)] bg-[var(--bg-card)]'
-                }`}
-              >
-                <span className="text-4xl shrink-0">🧩</span>
-                <div className="flex-1 min-w-0">
-                  <span className={`text-lg font-bold block ${seasonalTheme === null ? 'text-[var(--mint)]' : 'text-[var(--text-primary)]'}`}>
-                    Geen vast thema
-                  </span>
-                  <span className="text-sm text-[var(--text-muted)]">Laat het model eventueel seizoensdagen detecteren.</span>
-                </div>
-                {seasonalTheme === null && <span className="text-[var(--mint)] text-lg shrink-0">✓</span>}
-              </button>
-              {SEASONAL_THEME_OPTIONS.map(theme => (
+              {seasonalHint && (
                 <button
-                  key={theme.value}
-                  onClick={() => setSeasonalTheme(theme.value)}
+                  onClick={() => setSeasonalTheme(seasonalHint.key)}
                   className={`flex items-center gap-5 p-5 rounded-3xl border text-left transition-all ${
-                    seasonalTheme === theme.value
+                    seasonalTheme === seasonalHint.key
                       ? 'border-[var(--gold)] bg-[var(--gold)]/10'
                       : 'border-[var(--border)] bg-[var(--bg-card)]'
                   }`}
                 >
-                  <span className="text-4xl shrink-0">{theme.emoji}</span>
+                  <span className="text-4xl shrink-0">{seasonalHint.emoji}</span>
                   <div className="flex-1 min-w-0">
-                    <span className={`text-lg font-bold block ${seasonalTheme === theme.value ? 'text-[var(--gold)]' : 'text-[var(--text-primary)]'}`}>
-                      {theme.label}
+                    <span className={`text-lg font-bold block ${seasonalTheme === seasonalHint.key ? 'text-[var(--gold)]' : 'text-[var(--text-primary)]'}`}>
+                      Auto: {seasonalHint.label}
                     </span>
-                    <span className="text-sm text-[var(--text-muted)]">{theme.sub}</span>
+                    <span className="text-sm text-[var(--text-muted)]">{seasonalHint.message}</span>
                   </div>
-                  {seasonalTheme === theme.value && <span className="text-[var(--gold)] text-lg shrink-0">✓</span>}
+                  {seasonalTheme === seasonalHint.key && (
+                    <span className="text-[var(--gold)] text-lg shrink-0">✓</span>
+                  )}
                 </button>
-              ))}
+              )}
+
+              <div className="mt-2">
+                <p className="text-[10px] font-mono tracking-widest text-[var(--text-muted)] uppercase mb-2">
+                  Zonder thema
+                </p>
+                <button
+                  onClick={() => setSeasonalTheme(null)}
+                  className={`flex items-center gap-5 p-5 rounded-3xl border text-left transition-all ${
+                    seasonalTheme === null
+                      ? 'border-[var(--mint)] bg-[var(--mint)]/10'
+                      : 'border-[var(--border)] bg-[var(--bg-card)]'
+                  }`}
+                >
+                  <span className="text-4xl shrink-0">🧩</span>
+                  <div className="flex-1 min-w-0">
+                    <span className={`text-lg font-bold block ${seasonalTheme === null ? 'text-[var(--mint)]' : 'text-[var(--text-primary)]'}`}>
+                      Geen thema
+                    </span>
+                    <span className="text-sm text-[var(--text-muted)]">Geen vaste seizoensstijl, standaard mix.</span>
+                  </div>
+                  {seasonalTheme === null && <span className="text-[var(--mint)] text-lg shrink-0">✓</span>}
+                </button>
+              </div>
+
+              <div className="my-2 h-px bg-[var(--border)]/60" />
+
+              <div className="mt-1">
+                <p className="text-[10px] font-mono tracking-widest text-[var(--text-muted)] uppercase mb-2">
+                  Met thema
+                </p>
+                <div className="flex flex-col gap-3">
+                  {SEASONAL_THEME_OPTIONS.map(theme => (
+                    <button
+                      key={theme.value}
+                      onClick={() => setSeasonalTheme(theme.value)}
+                      className={`flex items-center gap-5 p-5 rounded-3xl border text-left transition-all ${
+                        seasonalTheme === theme.value
+                          ? 'border-[var(--gold)] bg-[var(--gold)]/10'
+                          : 'border-[var(--border)] bg-[var(--bg-card)]'
+                      }`}
+                    >
+                      <span className="text-4xl shrink-0">{theme.emoji}</span>
+                      <div className="flex-1 min-w-0">
+                        <span className={`text-lg font-bold block ${seasonalTheme === theme.value ? 'text-[var(--gold)]' : 'text-[var(--text-primary)]'}`}>
+                          {theme.label}
+                        </span>
+                        <span className="text-sm text-[var(--text-muted)]">{theme.sub}</span>
+                      </div>
+                      {seasonalTheme === theme.value && <span className="text-[var(--gold)] text-lg shrink-0">✓</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </>
         )}
@@ -394,33 +402,71 @@ export function CreatePartyPage() {
           <>
             <div className="mb-8">
               <h1 className="text-4xl font-bold leading-tight">
-                hoeveel<br />
-                <span className="italic text-[var(--mint)]">rondes?</span>
+                kies je<br />
+                <span className="italic text-[var(--mint)]">speeltempo.</span>
               </h1>
             </div>
-            <div className="flex flex-col gap-4 flex-1">
-              {([5, 10, 20] as const).map(r => (
+
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl px-4 py-3 mb-4">
+              <p className="text-[10px] font-mono tracking-widest text-[var(--text-muted)] uppercase mb-2">
+                Samenvatting
+              </p>
+              <p className="text-sm text-[var(--text-primary)] font-semibold">
+                {playCycles} speelronde(s) van {questionsPerCycle} vragen
+              </p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">
+                totaal {playCycles * questionsPerCycle} vragen, daarna telkens verplicht beschuldigen.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3 mb-4">
+              <p className="text-[10px] font-mono tracking-widest text-[var(--text-muted)] uppercase">
+                Aantal speelrondes
+              </p>
+              <div className="grid grid-cols-3 gap-3">
+                {([2, 3, 4] as const).map(value => (
+                  <button
+                    key={`cycles-${value}`}
+                    onClick={() => setPlayCycles(value)}
+                    className={`rounded-2xl border px-3 py-4 text-center transition-all ${
+                      playCycles === value
+                        ? 'border-[var(--mint)] bg-[var(--mint)]/10 text-[var(--mint)]'
+                        : 'border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-muted)]'
+                    }`}
+                  >
+                    <span className="block text-2xl font-bold font-mono">{value}</span>
+                    <span className="text-[10px] font-mono tracking-widest uppercase">blokken</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 flex-1">
+              <p className="text-[10px] font-mono tracking-widest text-[var(--text-muted)] uppercase">
+                Vragen per speelronde
+              </p>
+              {([3, 4, 5] as const).map(r => (
                 <button
                   key={r}
-                  onClick={() => setRounds(r)}
+                  onClick={() => setQuestionsPerCycle(r)}
                   className={`flex items-center gap-5 p-6 rounded-3xl border text-left transition-all ${
-                    rounds === r
+                    questionsPerCycle === r
                       ? 'border-[var(--mint)] bg-[var(--mint)]/10'
                       : 'border-[var(--border)] bg-[var(--bg-card)]'
                   }`}
                 >
-                  <span className={`text-5xl font-bold font-mono ${rounds === r ? 'text-[var(--mint)]' : 'text-[var(--text-muted)]'}`}>
+                  <span className={`text-5xl font-bold font-mono ${questionsPerCycle === r ? 'text-[var(--mint)]' : 'text-[var(--text-muted)]'}`}>
                     {r}
                   </span>
                   <div className="flex-1">
-                    <span className={`text-lg font-bold block ${rounds === r ? 'text-[var(--mint)]' : 'text-[var(--text-primary)]'}`}>
-                      {r === 5 ? 'Snelle ronde' : r === 10 ? 'Standaard avond' : 'Lange nacht'}
+                    <span className={`text-lg font-bold block ${questionsPerCycle === r ? 'text-[var(--mint)]' : 'text-[var(--text-primary)]'}`}>
+                      {r === 3 ? 'Sneller tempo' : r === 4 ? 'Gebalanceerd' : 'Meer opbouw'}
                     </span>
                     <span className="text-sm text-[var(--text-muted)]">
-                      {r === 5 ? 'in en uit, ~15 min' : r === 10 ? 'de klassieker, ~30 min' : 'niemand gaat vroeg naar huis'}
+                      {r === 3 ? 'vaak beschuldigen, hoog tempo' : r === 4 ? 'klassieke flow' : 'meer tijd om verdacht te doen'}
                     </span>
                   </div>
-                  {rounds === r && <span className="text-[var(--mint)] text-lg shrink-0">✓</span>}
+                  {questionsPerCycle === r && <span className="text-[var(--mint)] text-lg shrink-0">✓</span>}
                 </button>
               ))}
             </div>
@@ -434,8 +480,11 @@ export function CreatePartyPage() {
             <div className="mb-8">
               <h1 className="text-4xl font-bold leading-tight">
                 geef je game<br />
-                <span className="italic text-[var(--coral)]">een legendarische naam.</span>
+                <span className="italic text-[var(--coral)]">een iconische titel.</span>
               </h1>
+              <p className="text-sm text-[var(--text-muted)] mt-3 max-w-[34ch]">
+                Kies een naam die meteen de vibe zet. Je kunt handmatig typen of snel een nieuwe suggestie genereren.
+              </p>
             </div>
             <div className="flex flex-col gap-4 flex-1">
               <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-3xl p-5">
@@ -453,20 +502,16 @@ export function CreatePartyPage() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 gap-3">
-                <button
-                  onClick={() => setGameName(generateFunnyGameName())}
-                  className="w-full py-3 rounded-2xl border border-[var(--border)] text-[var(--text-muted)] text-sm font-semibold hover:text-[var(--text-primary)] hover:border-[var(--mint)] transition-all"
-                >
-                  🎲 Randomize naam
-                </button>
-                <button
-                  onClick={() => setGameName(generateFunnyGameName())}
-                  className="w-full py-3 rounded-2xl border border-dashed border-[var(--border)] text-[var(--text-muted)] text-sm font-semibold hover:text-[var(--coral)] hover:border-[var(--coral)] transition-all"
-                >
-                  ✨ Nog gekker
-                </button>
-              </div>
+              <button
+                onClick={() => setGameName(generateFunnyGameName(language))}
+                className="flex items-center gap-4 p-4 rounded-3xl border border-[var(--border)] bg-[var(--bg-card)] text-left hover:border-[var(--mint)] transition-all"
+              >
+                <span className="text-3xl shrink-0">🎲</span>
+                <div className="flex-1">
+                  <span className="text-base font-bold text-[var(--text-primary)] block">Genereer nieuwe naam</span>
+                  <span className="text-xs text-[var(--text-muted)]">Taal volgt automatisch de geselecteerde language.</span>
+                </div>
+              </button>
             </div>
             {error && <p className="text-[var(--coral)] text-sm mt-4">{error}</p>}
           </>
@@ -475,13 +520,33 @@ export function CreatePartyPage() {
         {/* CTA */}
         <div className="py-6">
           {step < TOTAL_STEPS ? (
-            <Button variant="mint" fullWidth size="lg" onClick={next}>
-              Volgende →
-            </Button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => (step === 1 ? router.push('/dashboard') : prev())}
+                className="px-5 py-4 rounded-full border border-[var(--border)] text-[var(--text-muted)] text-base font-semibold hover:text-[var(--text-primary)] hover:border-[var(--text-muted)] transition-colors whitespace-nowrap"
+              >
+                ← Vorige
+              </button>
+              <div className="flex-1">
+                <Button variant="mint" fullWidth size="lg" onClick={next}>
+                  Volgende →
+                </Button>
+              </div>
+            </div>
           ) : (
-            <Button variant="mint" fullWidth size="lg" disabled={loading} onClick={handleCreate}>
-              {loading ? 'Room aanmaken…' : 'Vragen genereren →'}
-            </Button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={prev}
+                className="px-5 py-4 rounded-full border border-[var(--border)] text-[var(--text-muted)] text-base font-semibold hover:text-[var(--text-primary)] hover:border-[var(--text-muted)] transition-colors whitespace-nowrap"
+              >
+                ← Vorige
+              </button>
+              <div className="flex-1">
+                <Button variant="mint" fullWidth size="lg" disabled={loading} onClick={handleCreate}>
+                  {loading ? 'Room aanmaken…' : 'Vragen genereren →'}
+                </Button>
+              </div>
+            </div>
           )}
         </div>
 
