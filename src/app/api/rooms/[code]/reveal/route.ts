@@ -14,7 +14,7 @@ export async function POST(
   const supabase = await createServiceClient()
   const { data: room, error: roomError } = await supabase
     .from('rooms')
-    .select('id, host_id, status, current_round')
+    .select('id, host_id, status, current_round, rounds_total, play_cycles, questions_per_cycle')
     .eq('code', code.toUpperCase())
     .single()
 

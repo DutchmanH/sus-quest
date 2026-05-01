@@ -63,8 +63,8 @@ export default function RevealPage({ params }: RevealPageProps) {
       const { data } = await supabase
         .from('rounds')
         .select('sidequest_player_id, sidequest_nl, sidequest_en')
-        .eq('room_id', currentRound.room_id)
-        .lt('round_number', currentRound.round_number)
+        .eq('room_id', currentRound!.room_id)
+        .lt('round_number', currentRound!.round_number)
         .not('sidequest_player_id', 'is', null)
         .order('round_number', { ascending: false })
         .limit(1)

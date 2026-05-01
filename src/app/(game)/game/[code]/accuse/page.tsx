@@ -108,7 +108,7 @@ export default function AccusePage({ params }: AccusePageProps) {
       const { data, error } = await supabase
         .from('accusations')
         .select('accuser_player_id')
-        .eq('round_id', currentRound.id)
+        .eq('round_id', currentRound!.id)
 
       if (cancelled) return
       if (error) return

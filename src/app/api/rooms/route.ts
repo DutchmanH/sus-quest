@@ -144,10 +144,10 @@ export async function POST(request: NextRequest) {
     room = insertWithNewColumns.data as { id: string; code: string } | null
   }
 
-  if (roomError) {
+  if (roomError || !room) {
     console.error('Room insert error:', roomError)
     return NextResponse.json(
-      { error: `Room aanmaken mislukt: ${roomError.message}` },
+      { error: `Room aanmaken mislukt: ${roomError?.message}` },
       { status: 500 }
     )
   }
