@@ -21,6 +21,7 @@ export default function RevealPage({ params }: RevealPageProps) {
   const { room, players, currentRound, loading } = useRoom(code)
   const [accusations, setAccusations] = useState<Accusation[]>([])
   const [fallbackRevealSidequest, setFallbackRevealSidequest] = useState<{
+    roundId: string
     playerId: string | null
     sidequestNl: string | null
     sidequestEn: string | null
@@ -51,10 +52,12 @@ export default function RevealPage({ params }: RevealPageProps) {
       .then(({ data }) => setAccusations((data ?? []) as Accusation[]))
   }, [currentRound])
 
+  const fallbackRevealRoundId = fallbackRevealSidequest?.roundId ?? null
+  const currentRoundId = currentRound?.id ?? null
+  const activeFallbackRevealSidequest = fallbackRevealRoundId === currentRoundId ? fallbackRevealSidequest : null
+
   useEffect(() => {
-    if (!currentRound) return
-    setFallbackRevealSidequest(null)
-    if (currentRound.sidequest_player_id) return
+    if (!currentRound?.id || currentRound.sidequest_player_id) return
 
     const supabase = createClient()
     let cancelled = false
@@ -72,6 +75,7 @@ export default function RevealPage({ params }: RevealPageProps) {
 
       if (cancelled || !data) return
       setFallbackRevealSidequest({
+        roundId: currentRound!.id,
         playerId: data.sidequest_player_id ?? null,
         sidequestNl: data.sidequest_nl ?? null,
         sidequestEn: data.sidequest_en ?? null,
@@ -135,11 +139,11 @@ export default function RevealPage({ params }: RevealPageProps) {
     )
   }
 
-  const revealSidequestPlayerId = currentRound.sidequest_player_id ?? fallbackRevealSidequest?.playerId ?? null
+  const revealSidequestPlayerId = currentRound.sidequest_player_id ?? activeFallbackRevealSidequest?.playerId ?? null
   const revealSidequestText =
     language === 'en'
-      ? (currentRound.sidequest_en ?? fallbackRevealSidequest?.sidequestEn ?? null)
-      : (currentRound.sidequest_nl ?? fallbackRevealSidequest?.sidequestNl ?? null)
+      ? (currentRound.sidequest_en ?? activeFallbackRevealSidequest?.sidequestEn ?? null)
+      : (currentRound.sidequest_nl ?? activeFallbackRevealSidequest?.sidequestNl ?? null)
   const susPlayer = players.find(p => p.id === revealSidequestPlayerId)
   const hasSus = !!susPlayer
   const questionsPerCycle = Math.max(1, Number(room.questions_per_cycle ?? 4))
