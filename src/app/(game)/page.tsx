@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { MobileContainer } from '@/components/layout/MobileContainer'
 import { Button } from '@/components/ui/Button'
-import { createClient } from '@/lib/supabase/client'
 
 export default function HomePage() {
   const router = useRouter()
@@ -13,12 +12,6 @@ export default function HomePage() {
   const [inactiveCount, setInactiveCount] = useState<number | null>(null)
 
   useEffect(() => {
-    // Redirect logged-in users to dashboard
-    const supabase = createClient()
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) router.replace('/dashboard')
-    })
-
     // Fetch live player count
     fetch('/api/live-count')
       .then(r => r.json())
@@ -27,7 +20,7 @@ export default function HomePage() {
         setInactiveCount(typeof inactive === 'number' ? inactive : null)
       })
       .catch(() => {})
-  }, [router])
+  }, [])
 
   const liveLabel = liveCount === null
     ? 'LIVE'
