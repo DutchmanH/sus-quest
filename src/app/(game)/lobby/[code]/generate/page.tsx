@@ -73,40 +73,58 @@ export default function GeneratePage({ params }: GeneratePageProps) {
   const [showQuickSettings, setShowQuickSettings] = useState(false)
   const [updatingSettings, setUpdatingSettings] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [expandedPreviewSets, setExpandedPreviewSets] = useState<number[]>([])
   const [quickRounds, setQuickRounds] = useState(10)
   const [quickVibe, setQuickVibe] = useState('feest')
   const [quickGroep, setQuickGroep] = useState('vrienden')
   const [quickContent, setQuickContent] = useState('blozen')
-  const [revealedSetSidequests, setRevealedSetSidequests] = useState<number[]>([])
+  const [expandedPreviewSetState, setExpandedPreviewSetState] = useState<{
+    key: string
+    values: number[]
+  }>({ key: '', values: [] })
+  const [revealedSetSidequestState, setRevealedSetSidequestState] = useState<{
+    key: string
+    values: number[]
+  }>({ key: '', values: [] })
   const questionsPerCycle = Math.max(1, Number(room?.questions_per_cycle ?? 4))
   const playCycles = Math.max(1, Number(room?.play_cycles ?? Math.ceil((room?.rounds_total ?? 10) / questionsPerCycle)))
   const derivedTotalQuestions = questionsPerCycle * playCycles
   const sortedRounds = [...rounds].sort((a, b) => a.round_number - b.round_number)
   const roundByNumber = new Map(sortedRounds.map(round => [round.round_number, round]))
-
-  useEffect(() => {
-    setRevealedSetSidequests([])
-  }, [room?.id, room?.play_cycles, room?.questions_per_cycle, rounds.length])
-
-  useEffect(() => {
-    setExpandedPreviewSets([])
-  }, [room?.id, room?.play_cycles, room?.questions_per_cycle, rounds.length])
+  const previewStateKey = [
+    room?.id ?? 'no-room',
+    room?.play_cycles ?? 'default-cycles',
+    room?.questions_per_cycle ?? 'default-questions',
+    rounds.length,
+  ].join(':')
+  const expandedPreviewSets = expandedPreviewSetState.key === previewStateKey
+    ? expandedPreviewSetState.values
+    : []
+  const revealedSetSidequests = revealedSetSidequestState.key === previewStateKey
+    ? revealedSetSidequestState.values
+    : []
 
   function toggleSetReveal(setIndex: number) {
-    setRevealedSetSidequests(prev =>
-      prev.includes(setIndex)
-        ? prev.filter(index => index !== setIndex)
-        : [...prev, setIndex]
-    )
+    setRevealedSetSidequestState(prev => {
+      const values = prev.key === previewStateKey ? prev.values : []
+      return {
+        key: previewStateKey,
+        values: values.includes(setIndex)
+          ? values.filter(index => index !== setIndex)
+          : [...values, setIndex],
+      }
+    })
   }
 
   function togglePreviewSet(setIndex: number) {
-    setExpandedPreviewSets(prev =>
-      prev.includes(setIndex)
-        ? prev.filter(index => index !== setIndex)
-        : [...prev, setIndex]
-    )
+    setExpandedPreviewSetState(prev => {
+      const values = prev.key === previewStateKey ? prev.values : []
+      return {
+        key: previewStateKey,
+        values: values.includes(setIndex)
+          ? values.filter(index => index !== setIndex)
+          : [...values, setIndex],
+      }
+    })
   }
 
   const previewSets = Array.from({ length: playCycles }, (_, index) => {

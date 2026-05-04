@@ -146,6 +146,12 @@ export default function DashboardPage() {
                     </button>
                   )}
                   <button
+                    onClick={() => { setGearOpen(false); router.push('/') }}
+                    className="w-full text-left px-4 py-3 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)] transition-colors border-b border-[var(--border)]"
+                  >
+                    Home
+                  </button>
+                  <button
                     onClick={() => { setGearOpen(false); router.push('/account') }}
                     className="w-full text-left px-4 py-3 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)] transition-colors border-b border-[var(--border)]"
                   >

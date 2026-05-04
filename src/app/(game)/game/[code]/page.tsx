@@ -23,13 +23,16 @@ export default function GamePage({ params }: GamePageProps) {
   const [returningLobby, setReturningLobby] = useState(false)
   const [movingNextRound, setMovingNextRound] = useState(false)
   const [movingPrevRound, setMovingPrevRound] = useState(false)
-  const [cardFlipped, setCardFlipped] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isAuthHost, setIsAuthHost] = useState(false)
   const [closeError, setCloseError] = useState<string | null>(null)
   const [nextRoundError, setNextRoundError] = useState<string | null>(null)
-  const [animatedQuestion, setAnimatedQuestion] = useState<string | null>(null)
+  const [animatedQuestion, setAnimatedQuestion] = useState('')
   const [questionAnimPhase, setQuestionAnimPhase] = useState<'idle' | 'out' | 'in' | 'settle'>('idle')
+  const [flippedRoundState, setFlippedRoundState] = useState<{ roundId: string | null; isFlipped: boolean }>({
+    roundId: null,
+    isFlipped: false,
+  })
   const previousRoundIdRef = useRef<string | null>(null)
   const animationTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([])
 
@@ -59,17 +62,6 @@ export default function GamePage({ params }: GamePageProps) {
   const question = currentRound
     ? (language === 'en' ? currentRound.main_question_en : currentRound.main_question_nl)
     : null
-
-  useEffect(() => {
-    if (!question) return
-    if (!animatedQuestion) {
-      setAnimatedQuestion(question)
-      return
-    }
-    if (animatedQuestion !== question) {
-      setAnimatedQuestion(question)
-    }
-  }, [question, animatedQuestion])
 
   useEffect(() => {
     if (!currentRound?.id || !question) return
@@ -106,11 +98,6 @@ export default function GamePage({ params }: GamePageProps) {
       animationTimeoutsRef.current = []
     }
   }, [])
-
-  useEffect(() => {
-    // Start every round with the private card hidden.
-    setCardFlipped(false)
-  }, [currentRound?.id])
 
   if (expired || (room?.status === 'finished' && room?.current_round <= 1)) {
     return (
@@ -171,6 +158,8 @@ export default function GamePage({ params }: GamePageProps) {
   }
 
   const questionText = question ?? ''
+  const visibleQuestion = animatedQuestion || questionText
+  const cardFlipped = flippedRoundState.roundId === currentRound.id ? flippedRoundState.isFlipped : false
   const me = players.find(p => p.id === playerId)
   const isHost = (me?.is_host ?? false) || isAuthHost
   const myScore = me?.score ?? 0
@@ -402,7 +391,7 @@ export default function GamePage({ params }: GamePageProps) {
                     willChange: 'transform, opacity',
                   }}
                 >
-                  {animatedQuestion ?? questionText}
+                  {visibleQuestion}
                 </h2>
               </div>
             </>
@@ -440,7 +429,10 @@ export default function GamePage({ params }: GamePageProps) {
               }}
             >
               <button
-                onClick={() => setCardFlipped(v => !v)}
+                onClick={() => setFlippedRoundState(prev => ({
+                  roundId: currentRound.id,
+                  isFlipped: prev.roundId === currentRound.id ? !prev.isFlipped : true,
+                }))}
                 className="relative w-full h-full rounded-2xl"
                 style={{
                   transformStyle: 'preserve-3d',

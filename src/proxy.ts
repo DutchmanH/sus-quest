@@ -49,7 +49,7 @@ export async function proxy(request: NextRequest) {
       await supabase.auth.signOut()
       return NextResponse.redirect(new URL('/login?blocked=1', request.url))
     }
-  } else if (pathname === '/login' || pathname === '/register' || pathname === '/') {
+  } else if (pathname === '/login' || pathname === '/register') {
     // Auth-page redirects: read session from cookie (no network call)
     const { data: { session } } = await supabase.auth.getSession()
     if (session) {

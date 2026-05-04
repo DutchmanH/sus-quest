@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { MobileContainer } from '@/components/layout/MobileContainer'
@@ -10,17 +10,14 @@ import { createClient } from '@/lib/supabase/client'
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const blockedAccountError = searchParams.get('blocked') === '1'
+    ? 'Je account is geblokkeerd. Neem contact op met de beheerder.'
+    : null
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(blockedAccountError)
   const [unconfirmed, setUnconfirmed] = useState(false)
-
-  useEffect(() => {
-    if (searchParams.get('blocked') === '1') {
-      setError('Je account is geblokkeerd. Neem contact op met de beheerder.')
-    }
-  }, [searchParams])
 
   async function handleLogin() {
     if (!email || !password) { setError('Vul alle velden in'); return }
