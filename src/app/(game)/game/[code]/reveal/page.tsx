@@ -25,6 +25,8 @@ export default function RevealPage({ params }: RevealPageProps) {
     sidequestNl: string | null
     sidequestEn: string | null
   } | null>(null)
+  /** Gate (accuse/reveal) rounds have no sidequest_player_id on the row — fetch prior play round */
+  const [revealSidequestFallbackDone, setRevealSidequestFallbackDone] = useState(false)
   const [movingNextRound, setMovingNextRound] = useState(false)
   const [nextRoundError, setNextRoundError] = useState<string | null>(null)
   const [isAuthHost, setIsAuthHost] = useState(false)
@@ -54,7 +56,18 @@ export default function RevealPage({ params }: RevealPageProps) {
   useEffect(() => {
     if (!currentRound) return
     setFallbackRevealSidequest(null)
-    if (currentRound.sidequest_player_id) return
+
+    const hasRowSidequest =
+      !!currentRound.sidequest_player_id?.trim() &&
+      !!currentRound.sidequest_nl?.trim() &&
+      !!currentRound.sidequest_en?.trim()
+
+    if (hasRowSidequest) {
+      setRevealSidequestFallbackDone(true)
+      return
+    }
+
+    setRevealSidequestFallbackDone(false)
 
     const supabase = createClient()
     let cancelled = false
@@ -63,19 +76,22 @@ export default function RevealPage({ params }: RevealPageProps) {
       const { data } = await supabase
         .from('rounds')
         .select('sidequest_player_id, sidequest_nl, sidequest_en')
-        .eq('room_id', currentRound!.room_id)
-        .lt('round_number', currentRound!.round_number)
+        .eq('room_id', currentRound.room_id)
+        .lt('round_number', currentRound.round_number)
         .not('sidequest_player_id', 'is', null)
         .order('round_number', { ascending: false })
         .limit(1)
         .maybeSingle()
 
-      if (cancelled || !data) return
-      setFallbackRevealSidequest({
-        playerId: data.sidequest_player_id ?? null,
-        sidequestNl: data.sidequest_nl ?? null,
-        sidequestEn: data.sidequest_en ?? null,
-      })
+      if (cancelled) return
+      if (data) {
+        setFallbackRevealSidequest({
+          playerId: data.sidequest_player_id ?? null,
+          sidequestNl: data.sidequest_nl ?? null,
+          sidequestEn: data.sidequest_en ?? null,
+        })
+      }
+      setRevealSidequestFallbackDone(true)
     }
 
     void loadFallbackRevealSidequest()
@@ -135,13 +151,23 @@ export default function RevealPage({ params }: RevealPageProps) {
     )
   }
 
-  const revealSidequestPlayerId = currentRound.sidequest_player_id ?? fallbackRevealSidequest?.playerId ?? null
+  const revealSidequestPlayerId =
+    currentRound.sidequest_player_id ?? fallbackRevealSidequest?.playerId ?? null
   const revealSidequestText =
     language === 'en'
-      ? (currentRound.sidequest_en ?? fallbackRevealSidequest?.sidequestEn ?? null)
-      : (currentRound.sidequest_nl ?? fallbackRevealSidequest?.sidequestNl ?? null)
+      ? (currentRound.sidequest_en?.trim() ||
+          fallbackRevealSidequest?.sidequestEn?.trim() ||
+          null)
+      : (currentRound.sidequest_nl?.trim() ||
+          fallbackRevealSidequest?.sidequestNl?.trim() ||
+          null)
   const susPlayer = players.find(p => p.id === revealSidequestPlayerId)
   const hasSus = !!susPlayer
+  const sidequestRowComplete =
+    !!currentRound.sidequest_player_id?.trim() &&
+    !!currentRound.sidequest_nl?.trim() &&
+    !!currentRound.sidequest_en?.trim()
+  const waitingRevealSidequest = !sidequestRowComplete && !revealSidequestFallbackDone
   const questionsPerCycle = Math.max(1, Number(room.questions_per_cycle ?? 4))
   const playCycles = Math.max(1, Number(room.play_cycles ?? Math.ceil((room.rounds_total ?? 10) / questionsPerCycle)))
   const indexAfterIntro = Math.max(0, room.current_round - 2)
@@ -171,28 +197,37 @@ export default function RevealPage({ params }: RevealPageProps) {
           </h1>
         </div>
 
-        {/* Sus reveal card */}
+        {/* Sus reveal card — dark text on mint so light theme (--bg-primary is light) stays readable */}
         <div className="bg-[var(--mint)] rounded-3xl p-5 mb-4">
-          <p className="text-xs font-mono tracking-widest text-[var(--bg-primary)] opacity-70 mb-3">
+          <p className="text-xs font-mono tracking-widest text-[#0A1914]/70 mb-3">
             THE SUS WAS
           </p>
-          {hasSus ? (
+          {waitingRevealSidequest ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="w-8 h-8 border-2 border-[#0A1914]/30 border-t-[#0A1914] rounded-full animate-spin" />
+            </div>
+          ) : hasSus ? (
             <>
               <div className="flex items-center gap-3 mb-3">
-                <Avatar name={susPlayer!.display_name} color={susPlayer!.avatar_color} size="lg" />
-                <div>
-                  <p className="text-xl font-bold text-[var(--bg-primary)]">{susPlayer!.display_name}</p>
-                  <p className="text-xs font-mono text-[var(--bg-primary)] opacity-70">MISSIE GELUKT · +1</p>
+                <Avatar
+                  name={susPlayer!.display_name}
+                  color={susPlayer!.avatar_color}
+                  icon={susPlayer!.avatar_icon ?? undefined}
+                  size="lg"
+                />
+                <div className="min-w-0">
+                  <p className="text-xl font-bold text-[#0A1914] truncate">{susPlayer!.display_name}</p>
+                  <p className="text-xs font-mono text-[#0A1914]/70">MISSIE GELUKT · +1</p>
                 </div>
               </div>
-              <div className="bg-[var(--bg-primary)] bg-opacity-20 rounded-2xl px-4 py-3">
-                <p className="text-[var(--bg-primary)] italic text-sm">
+              <div className="rounded-2xl border border-[#0A1914]/15 bg-[#0A1914]/10 px-4 py-3">
+                <p className="text-[#0A1914] italic text-sm leading-relaxed break-words">
                   &ldquo;{revealSidequestText ?? 'Geen sidequesttekst gevonden.'}&rdquo;
                 </p>
               </div>
             </>
           ) : (
-            <p className="text-[var(--bg-primary)] font-semibold">Geen sus deze ronde.</p>
+            <p className="text-[#0A1914] font-semibold">Geen sus deze ronde.</p>
           )}
         </div>
 
