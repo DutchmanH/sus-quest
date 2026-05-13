@@ -55,29 +55,30 @@ export default function RevealPage({ params }: RevealPageProps) {
 
   useEffect(() => {
     if (!currentRound) return
-    setFallbackRevealSidequest(null)
-
-    const hasRowSidequest =
-      !!currentRound.sidequest_player_id?.trim() &&
-      !!currentRound.sidequest_nl?.trim() &&
-      !!currentRound.sidequest_en?.trim()
-
-    if (hasRowSidequest) {
-      setRevealSidequestFallbackDone(true)
-      return
-    }
-
-    setRevealSidequestFallbackDone(false)
-
-    const supabase = createClient()
+    const round = currentRound
     let cancelled = false
+    const supabase = createClient()
 
-    async function loadFallbackRevealSidequest() {
+    async function run() {
+      setFallbackRevealSidequest(null)
+
+      const hasRowSidequest =
+        !!round.sidequest_player_id?.trim() &&
+        !!round.sidequest_nl?.trim() &&
+        !!round.sidequest_en?.trim()
+
+      if (hasRowSidequest) {
+        setRevealSidequestFallbackDone(true)
+        return
+      }
+
+      setRevealSidequestFallbackDone(false)
+
       const { data } = await supabase
         .from('rounds')
         .select('sidequest_player_id, sidequest_nl, sidequest_en')
-        .eq('room_id', currentRound.room_id)
-        .lt('round_number', currentRound.round_number)
+        .eq('room_id', round.room_id)
+        .lt('round_number', round.round_number)
         .not('sidequest_player_id', 'is', null)
         .order('round_number', { ascending: false })
         .limit(1)
@@ -94,7 +95,7 @@ export default function RevealPage({ params }: RevealPageProps) {
       setRevealSidequestFallbackDone(true)
     }
 
-    void loadFallbackRevealSidequest()
+    void run()
 
     return () => {
       cancelled = true
