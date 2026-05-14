@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { MobileContainer } from '@/components/layout/MobileContainer'
 import { Button } from '@/components/ui/Button'
 import { Avatar } from '@/components/ui/Avatar'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { useRoom } from '@/hooks/useRoom'
 import { useGameStore } from '@/store/gameStore'
 import { createClient } from '@/lib/supabase/client'
@@ -145,8 +146,16 @@ export default function RevealPage({ params }: RevealPageProps) {
   if (loading || !currentRound || !room) {
     return (
       <MobileContainer>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="w-8 h-8 border-2 border-[var(--mint)] border-t-transparent rounded-full animate-spin" />
+        <div className="flex flex-col min-h-screen px-5 pt-8 gap-5">
+          <Skeleton className="w-24 h-6 rounded-full self-center" />
+          <Skeleton className="w-20 h-20 rounded-full self-center" />
+          <Skeleton className="w-40 h-7 self-center" />
+          <Skeleton className="w-full h-24 rounded-2xl" />
+          <div className="flex flex-col gap-3">
+            {[...Array(3)].map((_, i) => (
+              <Skeleton key={i} className="h-12 w-full rounded-xl" />
+            ))}
+          </div>
         </div>
       </MobileContainer>
     )
@@ -169,12 +178,6 @@ export default function RevealPage({ params }: RevealPageProps) {
     !!currentRound.sidequest_nl?.trim() &&
     !!currentRound.sidequest_en?.trim()
   const waitingRevealSidequest = !sidequestRowComplete && !revealSidequestFallbackDone
-  const questionsPerCycle = Math.max(1, Number(room.questions_per_cycle ?? 4))
-  const playCycles = Math.max(1, Number(room.play_cycles ?? Math.ceil((room.rounds_total ?? 10) / questionsPerCycle)))
-  const indexAfterIntro = Math.max(0, room.current_round - 2)
-  const currentCycleIndex = Math.min(playCycles - 1, Math.max(0, Math.floor(indexAfterIntro / (questionsPerCycle + 1))))
-  const earlyBonus = Math.max(0, playCycles - currentCycleIndex - 1)
-  const correctPointsLabel = `+${1 + earlyBonus}`
 
   return (
     <MobileContainer>
@@ -218,7 +221,7 @@ export default function RevealPage({ params }: RevealPageProps) {
                 />
                 <div className="min-w-0">
                   <p className="text-xl font-bold text-[#0A1914] truncate">{susPlayer!.display_name}</p>
-                  <p className="text-xs font-mono text-[#0A1914]/70">MISSIE GELUKT · +1</p>
+                  <p className="text-xs font-mono text-[#0A1914]/70">SIDEQUEST</p>
                 </div>
               </div>
               <div className="rounded-2xl border border-[#0A1914]/15 bg-[#0A1914]/10 px-4 py-3">
@@ -274,7 +277,7 @@ export default function RevealPage({ params }: RevealPageProps) {
                           ? 'border-[var(--mint)] text-[var(--mint)]'
                           : 'border-[var(--coral)] text-[var(--coral)]'
                     }`}>
-                      {acc.is_correct === null ? 'GEEN SUS · 0' : acc.is_correct ? `BOOM · ${correctPointsLabel}` : 'NEIN · -1'}
+                      {acc.is_correct === null ? 'GEEN SUS · 0' : acc.is_correct ? 'BOOM · +1' : 'NEIN · +0'}
                     </span>
                   </div>
                 )

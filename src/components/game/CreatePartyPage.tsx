@@ -407,18 +407,6 @@ export function CreatePartyPage() {
               </h1>
             </div>
 
-            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl px-4 py-3 mb-4">
-              <p className="text-[10px] font-mono tracking-widest text-[var(--text-muted)] uppercase mb-2">
-                Samenvatting
-              </p>
-              <p className="text-sm text-[var(--text-primary)] font-semibold">
-                {playCycles} speelronde(s) van {questionsPerCycle} vragen
-              </p>
-              <p className="text-xs text-[var(--text-muted)] mt-1">
-                totaal {playCycles * questionsPerCycle} vragen, daarna telkens verplicht beschuldigen.
-              </p>
-            </div>
-
             <div className="flex flex-col gap-3 mb-4">
               <p className="text-[10px] font-mono tracking-widest text-[var(--text-muted)] uppercase">
                 Aantal speelrondes
@@ -428,14 +416,14 @@ export function CreatePartyPage() {
                   <button
                     key={`cycles-${value}`}
                     onClick={() => setPlayCycles(value)}
-                    className={`rounded-2xl border px-3 py-4 text-center transition-all ${
+                    className={`rounded-2xl border px-3 py-5 text-center transition-all ${
                       playCycles === value
                         ? 'border-[var(--mint)] bg-[var(--mint)]/10 text-[var(--mint)]'
                         : 'border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-muted)]'
                     }`}
                   >
-                    <span className="block text-2xl font-bold font-mono">{value}</span>
-                    <span className="text-[10px] font-mono tracking-widest uppercase">blokken</span>
+                    <span className="block text-4xl font-bold font-mono">{value}</span>
+                    <span className="text-[10px] font-mono tracking-widest uppercase mt-1 block">rondes</span>
                   </button>
                 ))}
               </div>

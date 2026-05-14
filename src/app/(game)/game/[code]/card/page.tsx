@@ -37,8 +37,8 @@ export default function CardPage({ params }: CardPageProps) {
         ? (round.sidequest_en ?? 'Keep it subtle. No one should notice.')
         : (round.sidequest_nl ?? 'Houd het subtiel. Niemand mag het merken.')
       const fakeTaskText = language === 'en'
-        ? (round.fake_task_en || 'Stay sharp and trust no one.')
-        : (round.fake_task_nl || 'Blijf scherp en vertrouw niemand.')
+        ? (round.suspicious_fact_en || 'Stay sharp and trust no one.')
+        : (round.suspicious_fact_nl || 'Blijf scherp en vertrouw niemand.')
 
       const text = isSus
         ? sidequestText

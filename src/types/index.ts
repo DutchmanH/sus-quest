@@ -74,8 +74,8 @@ export interface Round {
   sidequest_player_id: string | null
   sidequest_nl: string | null
   sidequest_en: string | null
-  fake_task_nl: string
-  fake_task_en: string
+  suspicious_fact_nl: string
+  suspicious_fact_en: string
   round_kind?: 'intro' | 'play' | 'accuse_gate'
   status: RoundStatus
   created_at: string
@@ -91,14 +91,14 @@ export interface Accusation {
   created_at: string
 }
 
-export interface GeneratedRound {
+export interface GeneratedQuestion {
   mainQuestion: { nl: string; en: string }
-  hasSidequest: boolean
-  sidequest?: {
-    playerIndex: number
-    text: { nl: string; en: string }
-  }
-  fakeTask: { nl: string; en: string }
+  suspiciousFact: { nl: string; en: string }
+}
+
+export interface GeneratedRound {
+  sidequest: { nl: string; en: string }
+  questions: GeneratedQuestion[]
 }
 
 export interface SeasonalPromptContext {

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Avatar } from '@/components/ui/Avatar'
 import { PlayerRow } from '@/components/game/PlayerRow'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { useRoom } from '@/hooks/useRoom'
 import { generateFunnyGameName } from '@/lib/funny-game-name'
 import { useGameStore } from '@/store/gameStore'
@@ -302,8 +303,24 @@ export default function LobbyPage({ params }: LobbyPageProps) {
   if (loading) {
     return (
       <MobileContainer>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="w-8 h-8 border-2 border-[var(--mint)] border-t-transparent rounded-full animate-spin" />
+        <div className="flex flex-col min-h-screen px-5 pt-5">
+          <div className="flex items-center justify-between mb-6">
+            <Skeleton className="w-16 h-6 rounded-full" />
+            <div className="flex items-center gap-2">
+              <Skeleton className="w-12 h-6 rounded-full" />
+              <Skeleton className="w-8 h-8 rounded-full" />
+            </div>
+          </div>
+          <Skeleton className="w-48 h-8 mb-2" />
+          <Skeleton className="w-32 h-5 mb-8" />
+          <div className="flex flex-col gap-3">
+            {[...Array(3)].map((_, i) => (
+              <Skeleton key={i} className="h-14 w-full" />
+            ))}
+          </div>
+          <div className="mt-auto pt-6 flex flex-col gap-3 pb-8">
+            <Skeleton className="h-14 w-full rounded-2xl" />
+          </div>
         </div>
       </MobileContainer>
     )

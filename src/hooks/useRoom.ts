@@ -20,8 +20,9 @@ export function useRoom(code: string) {
     if (!code) return
 
     let cancelled = false
+    let channel: ReturnType<typeof supabase.channel> | null = null
 
-    async function loadInitialData() {
+    async function init() {
       try {
         const { data: roomData, error: roomError } = await supabase
           .from('rooms')
@@ -31,7 +32,8 @@ export function useRoom(code: string) {
 
         if (cancelled || roomError || !roomData) return
 
-        roomIdRef.current = roomData.id
+        const roomId = roomData.id
+        roomIdRef.current = roomId
         currentRoundNumberRef.current = roomData.current_round
         setRoom(roomData as Room)
         setExpired(isRoomExpired(roomData as Room))
@@ -41,13 +43,13 @@ export function useRoom(code: string) {
           supabase
             .from('room_players')
             .select('*')
-            .eq('room_id', roomData.id)
+            .eq('room_id', roomId)
             .order('joined_at', { ascending: true }),
           needsRound
             ? supabase
                 .from('rounds')
                 .select('*')
-                .eq('room_id', roomData.id)
+                .eq('room_id', roomId)
                 .eq('round_number', roomData.current_round)
                 .maybeSingle()
             : Promise.resolve({ data: null }),
@@ -59,59 +61,61 @@ export function useRoom(code: string) {
       } finally {
         if (!cancelled) setLoading(false)
       }
+
+      if (cancelled) return
+      const roomId = roomIdRef.current
+      if (!roomId) return
+
+      channel = supabase
+        .channel(`room-${code}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'rooms', filter: `code=eq.${code.toUpperCase()}` },
+          (payload) => {
+            if (payload.eventType === 'UPDATE') {
+              const nextRoom = payload.new as Room
+              currentRoundNumberRef.current = nextRoom.current_round
+              setRoom(nextRoom)
+              setExpired(isRoomExpired(nextRoom))
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'room_players', filter: `room_id=eq.${roomId}` },
+          async () => {
+            const { data } = await supabase
+              .from('room_players')
+              .select('*')
+              .eq('room_id', roomId)
+              .order('joined_at', { ascending: true })
+            if (!cancelled) setPlayers((data ?? []) as RoomPlayer[])
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'rounds' },
+          (payload) => {
+            const changedRound = (payload.new ?? payload.old) as Round
+            if (!changedRound) return
+            if (changedRound.room_id !== roomId) return
+            setCurrentRound((prev) => {
+              const currentRoundNumber = currentRoundNumberRef.current
+              if (prev?.id === changedRound.id) return changedRound
+              if (changedRound.status === 'active') return changedRound
+              if (currentRoundNumber && changedRound.round_number === currentRoundNumber) return changedRound
+              return prev
+            })
+          }
+        )
+        .subscribe()
     }
 
-    loadInitialData()
-
-    const channel = supabase
-      .channel(`room-${code}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'rooms', filter: `code=eq.${code.toUpperCase()}` },
-        (payload) => {
-          if (payload.eventType === 'UPDATE') {
-            const nextRoom = payload.new as Room
-            currentRoundNumberRef.current = nextRoom.current_round
-            setRoom(nextRoom)
-            setExpired(isRoomExpired(nextRoom))
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'room_players' },
-        async () => {
-          const roomId = roomIdRef.current
-          if (!roomId) return
-          const { data } = await supabase
-            .from('room_players')
-            .select('*')
-            .eq('room_id', roomId)
-            .order('joined_at', { ascending: true })
-          if (!cancelled) setPlayers((data ?? []) as RoomPlayer[])
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'rounds' },
-        (payload) => {
-          const changedRound = (payload.new ?? payload.old) as Round
-          if (!changedRound) return
-          if (roomIdRef.current && changedRound.room_id !== roomIdRef.current) return
-          setCurrentRound((prev) => {
-            const currentRoundNumber = currentRoundNumberRef.current
-            if (prev?.id === changedRound.id) return changedRound
-            if (changedRound.status === 'active') return changedRound
-            if (currentRoundNumber && changedRound.round_number === currentRoundNumber) return changedRound
-            return prev
-          })
-        }
-      )
-      .subscribe()
+    init()
 
     return () => {
       cancelled = true
-      supabase.removeChannel(channel)
+      if (channel) supabase.removeChannel(channel)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code])

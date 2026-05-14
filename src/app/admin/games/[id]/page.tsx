@@ -36,7 +36,7 @@ export default async function AdminGameDetailPage({ params }: AdminGameDetailPag
       .single(),
     supabase
       .from('rounds')
-      .select('id, round_number, status, main_question_nl, main_question_en, has_sidequest, sidequest_nl, sidequest_en, fake_task_nl, fake_task_en, sidequest_player_id, created_at')
+      .select('id, round_number, status, main_question_nl, main_question_en, has_sidequest, sidequest_nl, sidequest_en, suspicious_fact_nl, suspicious_fact_en, sidequest_player_id, created_at')
       .eq('room_id', id)
       .order('round_number', { ascending: true }),
     supabase
@@ -153,8 +153,8 @@ export default async function AdminGameDetailPage({ params }: AdminGameDetailPag
                       </p>
                       <p className="text-sm text-[var(--text-primary)] mb-1">NL: {round.sidequest_nl ?? '—'}</p>
                       <p className="text-sm text-[var(--text-primary)] mb-2">EN: {round.sidequest_en ?? '—'}</p>
-                      <p className="text-xs text-[var(--text-muted)] font-mono mb-1">Fake task</p>
-                      <p className="text-sm text-[var(--text-primary)]">NL: {round.fake_task_nl} · EN: {round.fake_task_en}</p>
+                      <p className="text-xs text-[var(--text-muted)] font-mono mb-1">Suspicious fact</p>
+                      <p className="text-sm text-[var(--text-primary)]">NL: {round.suspicious_fact_nl} · EN: {round.suspicious_fact_en}</p>
                     </div>
                   ) : (
                     <p className="text-xs text-[var(--text-muted)] font-mono">Geen sidequest in deze ronde.</p>

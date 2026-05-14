@@ -62,7 +62,8 @@ export async function POST(request: NextRequest) {
     const totalQuestions = questionsPerCycle * playCycles
 
     const { rounds: generatedRounds, usage } = await generateRounds(
-      totalQuestions,
+      playCycles,
+      questionsPerCycle,
       room.vibe,
       room.content_level,
       4,
@@ -76,7 +77,6 @@ export async function POST(request: NextRequest) {
 
     const roundsToInsert: Record<string, unknown>[] = []
     let roundNumber = 1
-    let questionIndex = 0
 
     roundsToInsert.push({
       room_id: room.id,
@@ -85,49 +85,49 @@ export async function POST(request: NextRequest) {
       main_question_en: 'Read your secret card and get ready.',
       has_sidequest: true,
       sidequest_player_id: null,
-      sidequest_nl: 'Open de ronde met een subtiele verdachte actie zonder dat het opvalt.',
-      sidequest_en: 'Start the round with a subtle suspicious action without being obvious.',
-      fake_task_nl: 'Check je rol en speel slim.',
-      fake_task_en: 'Check your role and play smart.',
+      sidequest_nl: 'Zorg dat iemand jouw naam noemt voor het einde van de ronde.',
+      sidequest_en: 'Make sure someone says your name before the round ends.',
+      suspicious_fact_nl: 'Kijk goed om je heen. Iemand hier heeft een agenda.',
+      suspicious_fact_en: 'Look around. Someone here has an agenda.',
       status: 'pending',
       round_kind: 'intro',
     })
 
     for (let cycle = 0; cycle < playCycles; cycle++) {
-      const cycleSidequestNl = generatedRounds[questionIndex]?.sidequest?.text?.nl ?? 'Doe iets verdachts maar subtiel.'
-      const cycleSidequestEn = generatedRounds[questionIndex]?.sidequest?.text?.en ?? 'Do something suspicious, but subtle.'
+      const generatedRound = generatedRounds[cycle]
+      const sidequestNl = generatedRound?.sidequest?.nl ?? 'Zorg dat iemand jouw naam noemt.'
+      const sidequestEn = generatedRound?.sidequest?.en ?? 'Make sure someone says your name.'
 
-      for (let question = 0; question < questionsPerCycle; question++) {
-        const generated = generatedRounds[questionIndex]
-        const hasSidequest = question === 0
+      const questions = generatedRound?.questions ?? []
+      for (let q = 0; q < questionsPerCycle; q++) {
+        const generated = questions[q]
         roundsToInsert.push({
           room_id: room.id,
           round_number: roundNumber++,
           main_question_nl: generated?.mainQuestion?.nl ?? 'Vraag',
           main_question_en: generated?.mainQuestion?.en ?? 'Question',
-          has_sidequest: hasSidequest,
+          has_sidequest: q === 0,
           sidequest_player_id: null,
-          sidequest_nl: cycleSidequestNl,
-          sidequest_en: cycleSidequestEn,
-          fake_task_nl: generated?.fakeTask?.nl ?? 'Doe niets opvallends.',
-          fake_task_en: generated?.fakeTask?.en ?? 'Do nothing suspicious.',
+          sidequest_nl: sidequestNl,
+          sidequest_en: sidequestEn,
+          suspicious_fact_nl: generated?.suspiciousFact?.nl ?? 'Feit: de persoon die het hardst ontkent heeft meestal iets te verbergen.',
+          suspicious_fact_en: generated?.suspiciousFact?.en ?? 'Fact: the person who denies the hardest usually has something to hide.',
           status: 'pending',
           round_kind: 'play',
         })
-        questionIndex += 1
       }
 
       roundsToInsert.push({
         room_id: room.id,
         round_number: roundNumber++,
-        main_question_nl: 'Verdacht moment: kies wie jij vertrouwt.',
-        main_question_en: 'Suspicion moment: pick who you trust.',
+        main_question_nl: 'Verdacht moment: wie had de sidequest deze ronde?',
+        main_question_en: 'Suspicion moment: who had the sidequest this round?',
         has_sidequest: false,
         sidequest_player_id: null,
         sidequest_nl: null,
         sidequest_en: null,
-        fake_task_nl: 'Kies je verdachte.',
-        fake_task_en: 'Choose your suspect.',
+        suspicious_fact_nl: 'Kies nu. Geen twijfel.',
+        suspicious_fact_en: 'Choose now. No hesitation.',
         status: 'pending',
         round_kind: 'accuse_gate',
       })
@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
         room_id: room.id,
         host_user_id: user.id,
         model: usage.model,
-        rounds_requested: totalQuestions,
+        rounds_requested: playCycles * questionsPerCycle,
         rounds_generated: roundsToInsert.length,
         prompt_tokens: usage.promptTokens,
         completion_tokens: usage.completionTokens,

@@ -6,6 +6,7 @@ import { MobileContainer } from '@/components/layout/MobileContainer'
 import { Button } from '@/components/ui/Button'
 import { PlayerRow } from '@/components/game/PlayerRow'
 import { Avatar } from '@/components/ui/Avatar'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { useRoom } from '@/hooks/useRoom'
 import { useGameStore } from '@/store/gameStore'
 import { createClient } from '@/lib/supabase/client'
@@ -22,7 +23,7 @@ export default function AccusePage({ params }: AccusePageProps) {
   const router = useRouter()
   const { playerId } = useGameStore()
   const { room, players, currentRound, loading } = useRoom(code)
-  const [selected, setSelected] = useState<string | 'none' | null>(null)
+  const [selected, setSelected] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
   const [resolvingRound, setResolvingRound] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -141,20 +142,6 @@ export default function AccusePage({ params }: AccusePageProps) {
     setActionError(null)
     const supabase = createClient()
 
-    if (selected === 'none') {
-      const { error } = await supabase
-        .from('accusations')
-        .delete()
-        .eq('round_id', currentRound.id)
-        .eq('accuser_player_id', playerId)
-      if (error) {
-        setActionError('Keuze aanpassen mislukt')
-        return
-      }
-      setSubmitted(true)
-      return
-    }
-
     const { data: existing, error: existingError } = await supabase
       .from('accusations')
       .select('id')
@@ -196,12 +183,6 @@ export default function AccusePage({ params }: AccusePageProps) {
   const isHost = (me?.is_host ?? false) || isAuthHost
   const otherPlayers = players.filter(p => p.id !== playerId)
   const hasVoted = (id: string) => votedPlayerIds.includes(id) || (submitted && id === playerId)
-  const questionsPerCycle = Math.max(1, Number(room?.questions_per_cycle ?? 4))
-  const playCycles = Math.max(1, Number(room?.play_cycles ?? Math.ceil((room?.rounds_total ?? 10) / questionsPerCycle)))
-  const indexAfterIntro = Math.max(0, (room?.current_round ?? 1) - 2)
-  const currentCycleIndex = Math.min(playCycles - 1, Math.max(0, Math.floor(indexAfterIntro / (questionsPerCycle + 1))))
-  const earlyBonus = Math.max(0, playCycles - currentCycleIndex - 1)
-  const correctPointsLabel = `+${1 + earlyBonus}`
 
   const moveToReveal = useCallback(async () => {
     if (!currentRound || !isHost || resolvingRound) return
@@ -243,8 +224,17 @@ export default function AccusePage({ params }: AccusePageProps) {
   if (loading || !currentRound || loadingExistingAccusation) {
     return (
       <MobileContainer>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="w-8 h-8 border-2 border-[var(--mint)] border-t-transparent rounded-full animate-spin" />
+        <div className="flex flex-col min-h-screen px-5 pt-5">
+          <div className="flex items-center justify-between mb-6">
+            <Skeleton className="w-36 h-6 rounded-full" />
+            <Skeleton className="w-14 h-8 rounded-full" />
+          </div>
+          <Skeleton className="w-full h-10 mb-6 rounded-2xl" />
+          <div className="grid grid-cols-2 gap-3 flex-1">
+            {[...Array(4)].map((_, i) => (
+              <Skeleton key={i} className="h-20 rounded-2xl" />
+            ))}
+          </div>
         </div>
       </MobileContainer>
     )
@@ -270,10 +260,7 @@ export default function AccusePage({ params }: AccusePageProps) {
             <span className="italic text-[var(--coral)]">about that?</span>
           </h1>
           <p className="text-sm text-[var(--text-muted)] mt-2">
-            fout? jij drinkt. geen druk 💅
-          </p>
-          <p className="text-xs font-mono tracking-widest text-[var(--coral)] mt-2">
-            Let op: fout verdenken = -1 punt. Goed = {correctPointsLabel} (vroeg in het spel meer).
+            fout? jij drinkt. goed? +1 punt 🔍
           </p>
         </div>
 
@@ -326,20 +313,6 @@ export default function AccusePage({ params }: AccusePageProps) {
               onSelect={() => setSelected(player.id)}
             />
           ))}
-          <button
-            type="button"
-            onClick={() => setSelected('none')}
-            className={`w-full text-left rounded-2xl border px-4 py-3 transition-all ${
-              selected === 'none'
-                ? 'border-[var(--mint)] bg-[var(--mint)]/10'
-                : 'border-[var(--border)] bg-[var(--bg-card)] hover:border-[var(--mint)]/60'
-            }`}
-          >
-            <p className="text-sm font-semibold text-[var(--text-primary)]">Niemand</p>
-            <p className="text-xs font-mono tracking-widest text-[var(--text-muted)] mt-1">
-              geen verdachte kiezen deze ronde
-            </p>
-          </button>
         </div>
 
         {/* CTAs */}
@@ -365,11 +338,7 @@ export default function AccusePage({ params }: AccusePageProps) {
             disabled={!selected}
             onClick={handleAccuse}
           >
-            {!submitted
-              ? 'Call the sus! 🚨'
-              : selected === 'none'
-                ? 'Niemand-keuze opslaan'
-                : 'Keuze aanpassen'}
+            {!submitted ? 'Call the sus! 🚨' : 'Keuze aanpassen'}
           </Button>
           {submitted && (
             <div className="text-center py-1 text-[var(--text-muted)] text-xs font-mono">

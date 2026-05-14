@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { MobileContainer } from '@/components/layout/MobileContainer'
 import { Button } from '@/components/ui/Button'
 import { PlayerStrip } from '@/components/game/PlayerStrip'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { createClient } from '@/lib/supabase/client'
 import { useRoom } from '@/hooks/useRoom'
 import { useGameStore } from '@/store/gameStore'
@@ -150,8 +151,15 @@ export default function GamePage({ params }: GamePageProps) {
 
     return (
       <MobileContainer>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="w-8 h-8 border-2 border-[var(--mint)] border-t-transparent rounded-full animate-spin" />
+        <div className="flex flex-col min-h-screen px-5 pt-8">
+          <div className="flex-1 flex flex-col items-center justify-center gap-6">
+            <Skeleton className="w-24 h-5 rounded-full" />
+            <Skeleton className="w-full h-32" />
+            <Skeleton className="w-3/4 h-5" />
+          </div>
+          <div className="pb-6">
+            <Skeleton className="h-16 w-full rounded-2xl" />
+          </div>
         </div>
       </MobileContainer>
     )
@@ -185,8 +193,8 @@ export default function GamePage({ params }: GamePageProps) {
       ? (currentRound.sidequest_en ?? 'Keep it subtle. No one should notice.')
       : (currentRound.sidequest_nl ?? 'Houd het subtiel. Niemand mag het merken.'))
     : (language === 'en'
-      ? (currentRound.fake_task_en || 'Stay sharp and trust no one.')
-      : (currentRound.fake_task_nl || 'Blijf scherp en vertrouw niemand.'))
+      ? (currentRound.suspicious_fact_en || 'Stay sharp and trust no one.')
+      : (currentRound.suspicious_fact_nl || 'Blijf scherp en vertrouw niemand.'))
 
   async function closeGame() {
     if (!room || !isHost || closingGame) return
@@ -305,7 +313,7 @@ export default function GamePage({ params }: GamePageProps) {
             {isIntroRound
               ? 'RONDE 1 · INTRO'
               : isCycleStartRound
-                ? 'NIEUWE SET · CHECK JE KAART'
+                ? 'NIEUWE RONDE · CHECK JE KAART'
                 : `VRAAG ${currentQuestionNumber}/${derivedTotalQuestions}`}
           </span>
           <div className="flex gap-2 items-center">
@@ -399,10 +407,10 @@ export default function GamePage({ params }: GamePageProps) {
           {isSidequestFocusRound && (
             <div className="mb-4">
               <p className="text-xs font-mono tracking-widest text-[var(--mint)] mb-2 uppercase">
-                {isIntroRound ? 'Ronde 1 · Intro' : 'Nieuwe set · Sidequest check'}
+                {isIntroRound ? 'Ronde 1 · Intro' : 'Nieuwe ronde · Sidequest check'}
               </p>
               <h2 className="text-3xl font-bold leading-tight text-[var(--text-primary)]">
-                {isIntroRound ? 'Check eerst je kaart: heb jij een sidequest?' : 'Nieuwe set: check opnieuw je geheime kaart.'}
+                {isIntroRound ? 'Check eerst je kaart: heb jij een sidequest?' : 'Nieuwe ronde: check opnieuw je geheime kaart.'}
               </h2>
               <p className="text-sm text-[var(--text-muted)] mt-2">
                 Draai je priv kaart om, lees stil je opdracht en houd die geheim.

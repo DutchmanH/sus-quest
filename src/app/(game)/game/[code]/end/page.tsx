@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { MobileContainer } from '@/components/layout/MobileContainer'
 import { Button } from '@/components/ui/Button'
 import { Avatar } from '@/components/ui/Avatar'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { useRoom } from '@/hooks/useRoom'
 import { getPlayerTitle } from '@/lib/game-logic'
 
@@ -23,8 +24,17 @@ export default function EndPage({ params }: EndPageProps) {
   if (loading || !room) {
     return (
       <MobileContainer>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="w-8 h-8 border-2 border-[var(--mint)] border-t-transparent rounded-full animate-spin" />
+        <div className="flex flex-col min-h-screen px-5 pt-8 gap-5">
+          <Skeleton className="w-full h-40 rounded-3xl" />
+          <div className="flex flex-col gap-3">
+            {[...Array(4)].map((_, i) => (
+              <Skeleton key={i} className="h-14 w-full rounded-xl" />
+            ))}
+          </div>
+          <div className="mt-auto pb-8 flex gap-3">
+            <Skeleton className="flex-1 h-12 rounded-2xl" />
+            <Skeleton className="flex-1 h-12 rounded-2xl" />
+          </div>
         </div>
       </MobileContainer>
     )

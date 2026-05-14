@@ -47,7 +47,8 @@ export interface GenerateRoundsResult {
 }
 
 export async function generateRounds(
-  roundCount: number,
+  numRounds: number,
+  questionsPerRound: number,
   setting: string,
   boldness: string,
   playerCount: number,
@@ -59,7 +60,8 @@ export async function generateRounds(
   const boldnessCtx = BOLDNESS_CONTEXT[boldness] ?? BOLDNESS_CONTEXT['blozen']
 
   const prompt = buildRoundsPrompt({
-    roundCount,
+    numRounds,
+    questionsPerRound,
     settingCtx,
     groepCtx,
     boldnessCtx,
@@ -111,7 +113,8 @@ export async function generateRounds(
 }
 
 export function buildRoundsPrompt(input: {
-  roundCount: number
+  numRounds: number
+  questionsPerRound: number
   settingCtx: string
   groepCtx: string
   boldnessCtx: string
@@ -119,12 +122,12 @@ export function buildRoundsPrompt(input: {
   seasonalContext?: SeasonalPromptContext | null
 }): string {
   const seasonalBlock = input.seasonalContext
-    ? `\nSEIZOENS-THEMA:\n- Thema: ${input.seasonalContext.label}\n- Bron: ${input.seasonalContext.source}\n- Instructie (NL): ${input.seasonalContext.shortInstructionNl}\n- Instructie (EN): ${input.seasonalContext.shortInstructionEn}\n- Voeg in totaal 1 of 2 seasonal rondes toe. De andere rondes blijven normaal.\n- Seasonal vragen moeten passen bij de gekozen boldness, setting en groep.\n`
+    ? `\nSEIZOENS-THEMA:\n- Thema: ${input.seasonalContext.label}\n- Bron: ${input.seasonalContext.source}\n- Instructie (NL): ${input.seasonalContext.shortInstructionNl}\n- Instructie (EN): ${input.seasonalContext.shortInstructionEn}\n- Verwerk het thema in 1 of 2 rondes. De andere rondes blijven normaal.\n- Seizoensvragen moeten passen bij de gekozen boldness, setting en groep.\n`
     : ''
 
   return `Je bent de spelmeester van SusQuest — een sociaal partygame gebaseerd op wantrouwen, geheime missies en groepsgedrag.
 
-Genereer precies ${input.roundCount} speelrondes.
+Genereer precies ${input.numRounds} rondes. Elke ronde bevat precies ${input.questionsPerRound} vragen.
 
 CONTEXT OVER DEZE GROEP:
 - Locatie: ${input.settingCtx}
@@ -133,39 +136,54 @@ CONTEXT OVER DEZE GROEP:
 - Aantal spelers: ${input.playerCount}
 ${seasonalBlock}
 
-SPELREGELS:
-- Het spel werkt in sets: aan het begin van een set krijgt precies 1 speler een sidequest, daarna volgt een beschuldigmoment.
-- Daarom moet ELKE gegenereerde speelvraag een bruikbare sidequest-tekst bevatten die ook in latere vragen van dezelfde set logisch blijft.
-- Zet hasSidequest voor output-compatibiliteit op true en vul sidequest altijd in.
-- Bij sidequest: playerIndex is een getal van 0 tot ${input.playerCount - 1}
-- Opdrachten zijn KORT en DIRECT — max 2 zinnen, geen uitleg, geen als/dan constructies
-- mainQuestion stelt een vraag aan de hele groep: over gedrag, keuzes, persoonlijkheid of sociale dynamiek. De vraag moet iets onthullen over wie iemand echt is.
-- sidequest is een geheime persoonlijke opdracht voor ÉÉN speler. Die speler moet dit ongemerkt uitvoeren tijdens het beantwoorden van de hoofdvraag.
-- Sidequests moeten ALTIJD CONCREET, OBSERVEERBAAR en UITVOERBAAR zijn binnen 20-60 seconden.
-- Gebruik expliciete acties met meetbare details (aantal, kant, timing, doelwit). Vermijd vage formuleringen.
-- VERBODEN sidequest-stijl: "wees verdacht", "doe iets opvallends", "gedraag je raar", "probeer subtiel te zijn", "maak het ongemakkelijk".
-- VERPLICHTE sidequest-stijl: micro-acties zoals "krab 3x aan je linker oor", "knipoog 2x naar speler links", "zeg 2 keer exact hetzelfde stopwoord", "raak je glas 3x aan zonder te drinken", "vraag 2 verschillende spelers of ze je vertrouwen", "zet binnen 30 sec een pet/hoed op (als aanwezig)".
-- Schrijf sidequests als een heldere imperatief in 1 zin. Geen meta-uitleg, geen contextuitleg.
-- Sidequests moeten grappig zijn voor een drankspel: sociaal, licht awkward, een beetje ondeugend, maar haalbaar en veilig.
-- fakeTask is wat de ANDERE spelers zien op hun kaart. Dit is GEEN opdracht — het is een grappig, ironisch of licht uitdagend feitje of observatie dat past bij de vraag. Voorbeelden: "Wacht even... is iedereen hier eigenlijk wel te vertrouwen?", "Feit: mensen die te hard lachen zijn altijd verdacht.", "Kleine uitdaging: kijk de persoon rechts van je 3 seconden recht in de ogen." Houd het kort, grappig, en niet verdacht.
-- Toon: speels, licht sarcastisch, mysterieus — denk detective-vibe met een vleugje chaos
-- Pas de content aan op de bovenstaande context. Maak de vragen specifiek voor deze setting en groep, niet generiek.
-- Geef ALTIJD zowel Nederlandse (nl) als Engelse (en) versies
+RONDE-STRUCTUUR:
+- Elke ronde heeft exact 1 sidequest voor 1 speler. Die sidequest loopt door tijdens ALLE vragen van die ronde.
+- Na alle vragen in een ronde volgt een beschuldigmoment: wie had de sidequest?
+- De sidequest moet dus uitvoerbaar en detecteerbaar zijn gedurende de volledige ronde, niet enkel tijdens één vraag.
+
+SIDEQUEST REGELS:
+- De sidequest is een geheime sociale manipulatieopdracht voor ÉÉN speler.
+- De sidequest moet WAARNEEMBAAR zijn voor andere spelers tijdens het beschuldigmoment.
+- VERBODEN: "wees verdacht", "doe iets opvallends", "gedraag je raar", micro-acties die maar 1 seconde duren.
+- VERPLICHTE STIJL: sociale manipulatie over de hele ronde. Voorbeelden:
+  "Zorg dat iemand jouw naam noemt tijdens een antwoord."
+  "Laat iemand het woord 'geel' zeggen."
+  "Zorg dat iemand van mening verandert."
+  "Laat iemand naar zijn drankje kijken zonder dat jij ernaar wijst."
+  "Zorg dat iemand je een compliment geeft."
+- Schrijf de sidequest als 1 heldere imperatief. Geen uitleg, geen als/dan.
+- De sidequest moet grappig, sociaal en licht uitdagend zijn — maar uitvoerbaar.
+
+VRAGEN REGELS:
+- mainQuestion stelt een vraag aan de HELE groep: over gedrag, keuzes, persoonlijkheid of sociale dynamiek.
+- De vraag moet iets onthullen over wie iemand echt is, en een context bieden waarin de sidequest kan worden uitgevoerd.
+- Vragen zijn KORT, DIRECT — max 2 zinnen.
+
+SUSPICIOUS FACT REGELS:
+- suspiciousFact is wat spelers ZONDER sidequest op hun kaart zien.
+- Dit is GEEN opdracht. Het is een paranoïa-versterker: een grappig, ironisch verdacht feitje over menselijk gedrag.
+- Voorbeelden: "Feit: de persoon die het hardst ontkent heeft meestal iets te verbergen.", "Let op: mensen die te snel antwoorden zijn zelden onschuldig.", "Verdachte mensen doen vaak alsof ze heel normaal zijn."
+- Elk suspicious fact moet passen bij de sfeer van de vraag in die ronde.
+- Houd het kort, grappig, en subtiel paranoïa-opwekkend.
+
+TOON: speels, licht sarcastisch, mysterieus — detective-vibe met een vleugje chaos.
+Pas content aan op setting en groep. Maak vragen specifiek, niet generiek.
+Geef ALTIJD zowel Nederlandse (nl) als Engelse (en) versies.
 
 Antwoord als JSON object met een "rounds" array, geen uitleg, geen markdown:
 {
   "rounds": [
     {
-      "mainQuestion": { "nl": "...", "en": "..." },
-      "hasSidequest": true,
-      "sidequest": {
-        "playerIndex": 2,
-        "text": { "nl": "...", "en": "..." }
-      },
-      "fakeTask": { "nl": "...", "en": "..." }
+      "sidequest": { "nl": "...", "en": "..." },
+      "questions": [
+        {
+          "mainQuestion": { "nl": "...", "en": "..." },
+          "suspiciousFact": { "nl": "...", "en": "..." }
+        }
+      ]
     }
   ]
 }
 
-Het sidequest veld is verplicht en mag nooit leeg zijn.`
+Elke ronde heeft exact ${input.questionsPerRound} vragen in de "questions" array. Het sidequest veld is verplicht en mag nooit leeg zijn.`
 }

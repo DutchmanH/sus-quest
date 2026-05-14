@@ -59,31 +59,46 @@ export async function POST(
       .maybeSingle()
     susId = fallbackRound?.sidequest_player_id ?? null
   }
-  const questionsPerCycle = Math.max(1, Number(room.questions_per_cycle ?? 4))
-  const playCycles = Math.max(1, Number(room.play_cycles ?? Math.ceil((room.rounds_total ?? 10) / questionsPerCycle)))
-  const indexAfterIntro = Math.max(0, room.current_round - 2)
-  const currentCycleIndex = Math.min(playCycles - 1, Math.max(0, Math.floor(indexAfterIntro / (questionsPerCycle + 1))))
-  const earlyBonus = Math.max(0, playCycles - currentCycleIndex - 1)
 
-  const scoreResult = await Promise.all(
+  // Mark accusations correct/incorrect
+  const markResult = await Promise.all(
     list.map((acc) => {
       const correct = susId ? (acc.accused_player_id === susId) : null
-      const delta = susId ? (correct ? (1 + earlyBonus) : -1) : 0
-      return Promise.all([
-        supabase.from('accusations').update({ is_correct: correct }).eq('id', acc.id),
-        supabase.rpc('increment_score', { player_id: acc.accuser_player_id, delta }),
-      ])
+      return supabase.from('accusations').update({ is_correct: correct }).eq('id', acc.id)
     })
   )
-  const hadScoreError = scoreResult.some(batch => batch.some(step => !!step.error))
-  if (hadScoreError) {
+  if (markResult.some(r => !!r.error)) {
     return NextResponse.json({ error: 'Score verwerking mislukt' }, { status: 500 })
   }
 
+  // Score other players: +1 correct, +0 wrong (no negatives)
+  const accuserUpdates = list
+    .filter(acc => susId && acc.accused_player_id === susId)
+    .map(acc => supabase.rpc('increment_score', { player_id: acc.accuser_player_id, delta: 1 }))
+  if (accuserUpdates.length > 0) {
+    const accuserResults = await Promise.all(accuserUpdates)
+    if (accuserResults.some(r => !!r.error)) {
+      return NextResponse.json({ error: 'Score verwerking mislukt' }, { status: 500 })
+    }
+  }
+
+  // Sus player scoring: +0 caught by majority, +2 not caught, +3 not chosen at all
   if (susId) {
-    const wasCaught = list.some((a) => a.accused_player_id === susId)
-    if (!wasCaught) {
-      const { error: susScoreError } = await supabase.rpc('increment_score', { player_id: susId, delta: 1 })
+    const { data: roomPlayers } = await supabase
+      .from('room_players')
+      .select('id')
+      .eq('room_id', room.id)
+    const totalVoters = (roomPlayers ?? []).filter(p => p.id !== susId).length
+    const votesForSus = list.filter(a => a.accused_player_id === susId).length
+    const caughtByMajority = totalVoters > 0 && votesForSus > totalVoters / 2
+
+    let susDelta = 0
+    if (!caughtByMajority) {
+      susDelta = votesForSus === 0 ? 3 : 2
+    }
+
+    if (susDelta > 0) {
+      const { error: susScoreError } = await supabase.rpc('increment_score', { player_id: susId, delta: susDelta })
       if (susScoreError) {
         return NextResponse.json({ error: 'Sidequest score verwerken mislukt' }, { status: 500 })
       }

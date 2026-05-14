@@ -371,7 +371,7 @@ export default function GeneratePage({ params }: GeneratePageProps) {
                 >
                   <div>
                     <p className="text-xs font-mono text-[var(--text-muted)] tracking-widest">
-                      SPEELSET {set.index + 1}
+                      RONDE {set.index + 1}
                     </p>
                     <p className="text-sm text-[var(--text-muted)]">
                       {set.questions.length} vraag{set.questions.length === 1 ? '' : 'en'}
@@ -383,7 +383,7 @@ export default function GeneratePage({ params }: GeneratePageProps) {
                         ? 'border-[var(--coral)] text-[var(--coral)]'
                         : 'border-[var(--border)] text-[var(--text-muted)]'
                     }`}>
-                      {set.hasSidequest ? '1 SIDEQUEST IN DEZE SET' : 'GEEN SIDEQUEST'}
+                      {set.hasSidequest ? '1 SIDEQUEST IN DEZE RONDE' : 'GEEN SIDEQUEST'}
                     </span>
                     <span className="text-[var(--mint)] text-xs font-mono tracking-widest">
                       {isExpanded ? '▼' : '▶'}
@@ -425,7 +425,7 @@ export default function GeneratePage({ params }: GeneratePageProps) {
                               </p>
                             </>
                           ) : (
-                            <p className="text-sm text-[var(--text-muted)]">Geen sidequest gevonden voor deze set.</p>
+                            <p className="text-sm text-[var(--text-muted)]">Geen sidequest gevonden voor deze ronde.</p>
                           )}
                         </div>
                       )}
@@ -434,7 +434,7 @@ export default function GeneratePage({ params }: GeneratePageProps) {
                     {set.accuseGate && (
                       <div className="mt-3 pt-3 border-t border-[var(--border)]">
                         <p className="text-xs font-mono tracking-widest text-[var(--gold)]">
-                          BESCHULDIG-RONDE NA DEZE SET
+                          BESCHULDIG-MOMENT NA DEZE RONDE
                         </p>
                       </div>
                     )}
