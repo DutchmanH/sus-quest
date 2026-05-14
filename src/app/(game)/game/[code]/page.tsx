@@ -1,14 +1,17 @@
 'use client'
 
-import { use, useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { use, useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { MobileContainer } from '@/components/layout/MobileContainer'
 import { Button } from '@/components/ui/Button'
 import { PlayerStrip } from '@/components/game/PlayerStrip'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { createClient } from '@/lib/supabase/client'
 import { useRoom } from '@/hooks/useRoom'
+import { useSyncPlayerFromUrl } from '@/hooks/useSyncPlayerFromUrl'
 import { useGameStore } from '@/store/gameStore'
+import { apiRoomCodeSegment, readApiErrorMessage } from '@/lib/read-api-error'
+import { normalizeRoomCodeParam, playerSessionSuffix } from '@/lib/game-player-query'
 
 interface GamePageProps {
   params: Promise<{ code: string }>
@@ -16,9 +19,17 @@ interface GamePageProps {
 
 export default function GamePage({ params }: GamePageProps) {
   const { code } = use(params)
+  const roomCode = normalizeRoomCodeParam(code)
   const router = useRouter()
-  const { playerId, language } = useGameStore()
-  const { room, players, currentRound, loading, expired } = useRoom(code)
+  const searchParams = useSearchParams()
+  useSyncPlayerFromUrl()
+  const { playerId, playerName, playerColor, language } = useGameStore()
+  const sessionSuffix = useMemo(
+    () => playerSessionSuffix(searchParams, { playerId, playerName, playerColor }),
+    [searchParams, playerId, playerName, playerColor],
+  )
+  const effectivePlayerId = playerId ?? searchParams.get('pid') ?? ''
+  const { room, players, currentRound, loading, expired } = useRoom(roomCode)
   const [hostMenuOpen, setHostMenuOpen] = useState(false)
   const [closingGame, setClosingGame] = useState(false)
   const [returningLobby, setReturningLobby] = useState(false)
@@ -47,18 +58,22 @@ export default function GamePage({ params }: GamePageProps) {
 
   useEffect(() => {
     if (room?.status === 'finished') {
-      router.push(`/game/${code}/end`)
+      router.push(`/game/${roomCode}/end${sessionSuffix}`)
+      return
     }
     if (room?.status === 'lobby') {
-      router.push(`/lobby/${code}`)
-    }
-    if (currentRound?.status === 'accuse') {
-      router.push(`/game/${code}/accuse`)
+      router.push(`/lobby/${roomCode}${sessionSuffix}`)
+      return
     }
     if (currentRound?.status === 'reveal') {
-      router.push(`/game/${code}/reveal`)
+      router.push(`/game/${roomCode}/reveal${sessionSuffix}`)
+      return
     }
-  }, [room?.status, currentRound, code, router])
+    if (currentRound?.status === 'accuse') {
+      router.push(`/game/${roomCode}/accuse${sessionSuffix}`)
+      return
+    }
+  }, [room?.status, currentRound?.status, roomCode, router, sessionSuffix])
 
   const question = currentRound
     ? (language === 'en' ? currentRound.main_question_en : currentRound.main_question_nl)
@@ -138,7 +153,7 @@ export default function GamePage({ params }: GamePageProps) {
               <div className="w-8 h-8 border-2 border-[var(--coral)] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
               <p className="text-[var(--text-muted)] text-sm font-mono">vragen genereren…</p>
               <button
-                onClick={() => router.push(`/lobby/${code}`)}
+                onClick={() => router.push(`/lobby/${roomCode}${sessionSuffix}`)}
                 className="mt-4 text-xs font-mono tracking-widest text-[var(--mint)] hover:opacity-80"
               >
                 terug naar lobby →
@@ -168,7 +183,7 @@ export default function GamePage({ params }: GamePageProps) {
   const questionText = question ?? ''
   const visibleQuestion = animatedQuestion || questionText
   const cardFlipped = flippedRoundState.roundId === currentRound.id ? flippedRoundState.isFlipped : false
-  const me = players.find(p => p.id === playerId)
+  const me = players.find(p => p.id === effectivePlayerId)
   const isHost = (me?.is_host ?? false) || isAuthHost
   const myScore = me?.score ?? 0
   const susFlagCount = 0 // from accusations count
@@ -186,7 +201,7 @@ export default function GamePage({ params }: GamePageProps) {
     ? 0
     : Math.min(derivedTotalQuestions, completedBlocks * questionsPerCycle + Math.min(positionInBlock + 1, questionsPerCycle))
   const progressRatio = derivedTotalQuestions > 0 ? currentQuestionNumber / derivedTotalQuestions : 0
-  const isSus = currentRound.sidequest_player_id === playerId
+  const isSus = currentRound.sidequest_player_id === effectivePlayerId
   const hasSidequest = currentRound.has_sidequest
   const cardText = isSus
     ? (language === 'en'
@@ -201,16 +216,18 @@ export default function GamePage({ params }: GamePageProps) {
     setClosingGame(true)
     setCloseError(null)
     try {
-      const res = await fetch(`/api/rooms/${code}/close`, { method: 'POST' })
-      const data = await res.json().catch(() => ({}))
+      const res = await fetch(`/api/rooms/${apiRoomCodeSegment(code)}/close`, {
+        method: 'POST',
+        credentials: 'include',
+      })
       if (!res.ok) {
-        setCloseError(data.error ?? 'Afsluiten mislukt')
-        setClosingGame(false)
+        setCloseError(await readApiErrorMessage(res))
         return
       }
       router.push('/dashboard')
     } catch {
-      setCloseError('Afsluiten mislukt')
+      setCloseError('Kon geen verbinding maken. Check internet en probeer opnieuw.')
+    } finally {
       setClosingGame(false)
     }
   }
@@ -247,7 +264,7 @@ export default function GamePage({ params }: GamePageProps) {
         return
       }
 
-      router.push(`/lobby/${code}`)
+      router.push(`/lobby/${roomCode}${sessionSuffix}`)
     } catch {
       setCloseError('Terugzetten naar lobby mislukt')
       setReturningLobby(false)
@@ -260,25 +277,25 @@ export default function GamePage({ params }: GamePageProps) {
     setNextRoundError(null)
 
     try {
-      const res = await fetch(`/api/rooms/${code}/advance`, { method: 'POST' })
-      const data = await res.json().catch(() => ({}))
+      const res = await fetch(`/api/rooms/${apiRoomCodeSegment(code)}/advance`, {
+        method: 'POST',
+        credentials: 'include',
+      })
       if (!res.ok) {
-        setNextRoundError(data.error ?? 'Volgende vraag starten mislukt')
-        setMovingNextRound(false)
+        setNextRoundError(await readApiErrorMessage(res))
         return
       }
+      const data = await res.json().catch(() => ({} as { finished?: boolean }))
       if (data.finished) {
-        router.push(`/game/${code}/end`)
+        router.push(`/game/${roomCode}/end${sessionSuffix}`)
         return
       }
-      router.push(`/game/${code}`)
+      router.push(`/game/${roomCode}${sessionSuffix}`)
     } catch {
-      setNextRoundError('Volgende vraag starten mislukt')
+      setNextRoundError('Kon geen verbinding maken. Probeer opnieuw.')
+    } finally {
       setMovingNextRound(false)
-      return
     }
-
-    setMovingNextRound(false)
   }
 
   async function moveToPreviousRoundDirectly() {
@@ -287,21 +304,20 @@ export default function GamePage({ params }: GamePageProps) {
     setNextRoundError(null)
 
     try {
-      const res = await fetch(`/api/rooms/${code}/previous`, { method: 'POST' })
-      const data = await res.json().catch(() => ({}))
+      const res = await fetch(`/api/rooms/${apiRoomCodeSegment(code)}/previous`, {
+        method: 'POST',
+        credentials: 'include',
+      })
       if (!res.ok) {
-        setNextRoundError(data.error ?? 'Vorige vraag openen mislukt')
-        setMovingPrevRound(false)
+        setNextRoundError(await readApiErrorMessage(res))
         return
       }
-      router.push(`/game/${code}`)
+      router.push(`/game/${roomCode}${sessionSuffix}`)
     } catch {
-      setNextRoundError('Vorige vraag openen mislukt')
+      setNextRoundError('Kon geen verbinding maken. Probeer opnieuw.')
+    } finally {
       setMovingPrevRound(false)
-      return
     }
-
-    setMovingPrevRound(false)
   }
 
   return (
@@ -361,7 +377,12 @@ export default function GamePage({ params }: GamePageProps) {
           </div>
         </div>
         {closeError && (
-          <p className="text-[var(--coral)] text-xs font-mono mb-2 text-right">{closeError}</p>
+          <div
+            className="mb-3 rounded-2xl border border-[var(--coral)]/45 bg-[var(--coral)]/10 px-3 py-2.5"
+            role="alert"
+          >
+            <p className="text-[var(--coral)] text-sm leading-snug">{closeError}</p>
+          </div>
         )}
 
         {/* Progress bar */}
@@ -514,7 +535,7 @@ export default function GamePage({ params }: GamePageProps) {
               size="md"
               fullWidth
               className="bg-[#60A5FA] text-[var(--bg-primary)] border-none hover:opacity-90"
-              onClick={() => router.push(`/game/${code}/accuse`)}
+              onClick={() => router.push(`/game/${roomCode}/accuse${sessionSuffix}`)}
             >
               {isHost ? '⚑ Open beschuldigingsfase' : '⚑ Naar beschuldigen'}
             </Button>

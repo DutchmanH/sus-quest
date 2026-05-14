@@ -1,15 +1,18 @@
 'use client'
 
-import { use, useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { use, useEffect, useMemo, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { MobileContainer } from '@/components/layout/MobileContainer'
 import { Button } from '@/components/ui/Button'
 import { Avatar } from '@/components/ui/Avatar'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useRoom } from '@/hooks/useRoom'
+import { useSyncPlayerFromUrl } from '@/hooks/useSyncPlayerFromUrl'
 import { useGameStore } from '@/store/gameStore'
 import { createClient } from '@/lib/supabase/client'
 import type { Accusation } from '@/types'
+import { apiRoomCodeSegment, readApiErrorMessage } from '@/lib/read-api-error'
+import { normalizeRoomCodeParam, playerSessionSuffix } from '@/lib/game-player-query'
 
 interface RevealPageProps {
   params: Promise<{ code: string }>
@@ -17,9 +20,17 @@ interface RevealPageProps {
 
 export default function RevealPage({ params }: RevealPageProps) {
   const { code } = use(params)
+  const roomCode = normalizeRoomCodeParam(code)
   const router = useRouter()
-  const { playerId, language } = useGameStore()
-  const { room, players, currentRound, loading } = useRoom(code)
+  const searchParams = useSearchParams()
+  useSyncPlayerFromUrl()
+  const { playerId, playerName, playerColor, language } = useGameStore()
+  const sessionSuffix = useMemo(
+    () => playerSessionSuffix(searchParams, { playerId, playerName, playerColor }),
+    [searchParams, playerId, playerName, playerColor],
+  )
+  const effectivePlayerId = playerId ?? searchParams.get('pid') ?? ''
+  const { room, players, currentRound, loading } = useRoom(roomCode)
   const [accusations, setAccusations] = useState<Accusation[]>([])
   const [fallbackRevealSidequest, setFallbackRevealSidequest] = useState<{
     playerId: string | null
@@ -34,15 +45,17 @@ export default function RevealPage({ params }: RevealPageProps) {
 
   useEffect(() => {
     if (room?.status === 'lobby') {
-      router.push(`/lobby/${code}`)
-    }
-    if (currentRound?.status === 'active') {
-      router.push(`/game/${code}`)
+      router.push(`/lobby/${roomCode}${sessionSuffix}`)
+      return
     }
     if (currentRound?.status === 'accuse') {
-      router.push(`/game/${code}/accuse`)
+      router.push(`/game/${roomCode}/accuse${sessionSuffix}`)
+      return
     }
-  }, [room?.status, currentRound?.status, code, router])
+    if (currentRound?.status === 'active') {
+      router.push(`/game/${roomCode}${sessionSuffix}`)
+    }
+  }, [room?.status, currentRound?.status, roomCode, router, sessionSuffix])
 
   useEffect(() => {
     if (!currentRound) return
@@ -116,7 +129,7 @@ export default function RevealPage({ params }: RevealPageProps) {
     }
   }, [room?.id, room?.host_id])
 
-  const me = players.find(p => p.id === playerId)
+  const me = players.find(p => p.id === effectivePlayerId)
   const isHost = (me?.is_host ?? false) || isAuthHost
 
   async function nextRound() {
@@ -124,21 +137,23 @@ export default function RevealPage({ params }: RevealPageProps) {
     setMovingNextRound(true)
     setNextRoundError(null)
     try {
-      const res = await fetch(`/api/rooms/${code}/advance`, { method: 'POST' })
-      const data = await res.json().catch(() => ({}))
+      const res = await fetch(`/api/rooms/${apiRoomCodeSegment(code)}/advance`, {
+        method: 'POST',
+        credentials: 'include',
+      })
       if (!res.ok) {
-        setNextRoundError(data.error ?? 'Volgende ronde starten mislukt')
-        setMovingNextRound(false)
+        setNextRoundError(await readApiErrorMessage(res))
         return
       }
-      setMovingNextRound(false)
+      const data = await res.json().catch(() => ({} as { finished?: boolean }))
       if (data.finished) {
-        router.push(`/game/${code}/end`)
+        router.push(`/game/${roomCode}/end${sessionSuffix}`)
         return
       }
-      router.push(`/game/${code}`)
+      router.push(`/game/${roomCode}${sessionSuffix}`)
     } catch {
-      setNextRoundError('Volgende ronde starten mislukt')
+      setNextRoundError('Kon geen verbinding maken. Probeer opnieuw.')
+    } finally {
       setMovingNextRound(false)
     }
   }

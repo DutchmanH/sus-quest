@@ -1,16 +1,19 @@
 'use client'
 
-import { use, useState, useEffect, useCallback, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { use, useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { MobileContainer } from '@/components/layout/MobileContainer'
 import { Button } from '@/components/ui/Button'
 import { PlayerRow } from '@/components/game/PlayerRow'
 import { Avatar } from '@/components/ui/Avatar'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useRoom } from '@/hooks/useRoom'
+import { useSyncPlayerFromUrl } from '@/hooks/useSyncPlayerFromUrl'
 import { useGameStore } from '@/store/gameStore'
 import { createClient } from '@/lib/supabase/client'
 import { DEFAULT_ICON } from '@/lib/avatars'
+import { apiRoomCodeSegment, readApiErrorMessage } from '@/lib/read-api-error'
+import { normalizeRoomCodeParam, playerSessionSuffix } from '@/lib/game-player-query'
 
 interface AccusePageProps {
   params: Promise<{ code: string }>
@@ -20,9 +23,17 @@ const ACCUSE_TIMER_SECONDS = 15
 
 export default function AccusePage({ params }: AccusePageProps) {
   const { code } = use(params)
+  const roomCode = normalizeRoomCodeParam(code)
   const router = useRouter()
-  const { playerId } = useGameStore()
-  const { room, players, currentRound, loading } = useRoom(code)
+  const searchParams = useSearchParams()
+  useSyncPlayerFromUrl()
+  const { playerId, playerName, playerColor } = useGameStore()
+  const sessionSuffix = useMemo(
+    () => playerSessionSuffix(searchParams, { playerId, playerName, playerColor }),
+    [searchParams, playerId, playerName, playerColor],
+  )
+  const effectivePlayerId = playerId ?? searchParams.get('pid') ?? ''
+  const { room, players, currentRound, loading } = useRoom(roomCode)
   const [selected, setSelected] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
   const [resolvingRound, setResolvingRound] = useState(false)
@@ -35,15 +46,16 @@ export default function AccusePage({ params }: AccusePageProps) {
 
   useEffect(() => {
     if (room?.status === 'lobby') {
-      router.push(`/lobby/${code}`)
+      router.push(`/lobby/${roomCode}${sessionSuffix}`)
+      return
     }
     if (currentRound?.status === 'reveal') {
-      router.push(`/game/${code}/reveal`)
+      router.push(`/game/${roomCode}/reveal${sessionSuffix}`)
     }
-  }, [room?.status, currentRound?.status, code, router])
+  }, [room?.status, currentRound?.status, roomCode, router, sessionSuffix])
 
   useEffect(() => {
-    if (!currentRound || !playerId) return
+    if (!currentRound || !effectivePlayerId) return
 
     const round = currentRound
     let cancelled = false
@@ -55,7 +67,7 @@ export default function AccusePage({ params }: AccusePageProps) {
         .from('accusations')
         .select('accused_player_id')
         .eq('round_id', round.id)
-        .eq('accuser_player_id', playerId)
+        .eq('accuser_player_id', effectivePlayerId)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()
@@ -84,7 +96,7 @@ export default function AccusePage({ params }: AccusePageProps) {
     return () => {
       cancelled = true
     }
-  }, [currentRound?.id, playerId])
+  }, [currentRound?.id, effectivePlayerId])
 
   useEffect(() => {
     if (!room) return
@@ -138,7 +150,7 @@ export default function AccusePage({ params }: AccusePageProps) {
   }, [currentRound?.id])
 
   async function handleAccuse() {
-    if (!selected || !currentRound || !playerId) return
+    if (!selected || !currentRound || !effectivePlayerId) return
     setActionError(null)
     const supabase = createClient()
 
@@ -146,7 +158,7 @@ export default function AccusePage({ params }: AccusePageProps) {
       .from('accusations')
       .select('id')
       .eq('round_id', currentRound.id)
-      .eq('accuser_player_id', playerId)
+      .eq('accuser_player_id', effectivePlayerId)
       .maybeSingle()
     if (existingError) {
       setActionError('Huidige keuze ophalen mislukt')
@@ -169,7 +181,7 @@ export default function AccusePage({ params }: AccusePageProps) {
     const { error } = await supabase.from('accusations').insert({
       room_id: room!.id,
       round_id: currentRound.id,
-      accuser_player_id: playerId,
+      accuser_player_id: effectivePlayerId,
       accused_player_id: selected,
     })
     if (error) {
@@ -179,24 +191,28 @@ export default function AccusePage({ params }: AccusePageProps) {
     setSubmitted(true)
   }
 
-  const me = players.find(p => p.id === playerId)
+  const me = players.find(p => p.id === effectivePlayerId)
   const isHost = (me?.is_host ?? false) || isAuthHost
-  const otherPlayers = players.filter(p => p.id !== playerId)
-  const hasVoted = (id: string) => votedPlayerIds.includes(id) || (submitted && id === playerId)
+  const otherPlayers = players.filter(p => p.id !== effectivePlayerId)
+  const hasVoted = (id: string) => votedPlayerIds.includes(id) || (submitted && id === effectivePlayerId)
 
   const moveToReveal = useCallback(async () => {
     if (!currentRound || !isHost || resolvingRound) return
     setResolvingRound(true)
     setActionError(null)
-
-    const res = await fetch(`/api/rooms/${code}/reveal`, { method: 'POST' })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      setActionError(data.error ?? 'Naar reveal fase gaan mislukt')
+    try {
+      const res = await fetch(`/api/rooms/${apiRoomCodeSegment(code)}/reveal`, {
+        method: 'POST',
+        credentials: 'include',
+      })
+      if (!res.ok) {
+        setActionError(await readApiErrorMessage(res))
+      }
+    } catch {
+      setActionError('Kon geen verbinding maken. Probeer opnieuw.')
+    } finally {
       setResolvingRound(false)
-      return
     }
-    setResolvingRound(false)
   }, [code, currentRound, isHost, resolvingRound])
 
   useEffect(() => {
@@ -293,10 +309,10 @@ export default function AccusePage({ params }: AccusePageProps) {
                   </div>
                   <span
                     className={`text-[10px] text-center truncate w-full ${
-                      player.id === playerId ? 'text-[var(--mint)] font-semibold' : 'text-[var(--text-muted)]'
+                      player.id === effectivePlayerId ? 'text-[var(--mint)] font-semibold' : 'text-[var(--text-muted)]'
                     }`}
                   >
-                    {player.id === playerId ? 'jij' : player.display_name}
+                    {player.id === effectivePlayerId ? 'jij' : player.display_name}
                   </span>
                 </div>
               ))}
@@ -324,7 +340,7 @@ export default function AccusePage({ params }: AccusePageProps) {
             variant="ghost"
             fullWidth
             size="md"
-            onClick={() => router.push(`/game/${code}`)}
+            onClick={() => router.push(`/game/${roomCode}${sessionSuffix}`)}
           >
             ← Terug naar vraag
           </Button>

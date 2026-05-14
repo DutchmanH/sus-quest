@@ -15,6 +15,8 @@ import { useGameStore } from '@/store/gameStore'
 import { createClient } from '@/lib/supabase/client'
 import { AVATAR_COLORS } from '@/types'
 import { AVATAR_ICONS, DEFAULT_ICON } from '@/lib/avatars'
+import { apiRoomCodeSegment, readApiErrorMessage } from '@/lib/read-api-error'
+import { normalizeRoomCodeParam, playerSessionSuffix } from '@/lib/game-player-query'
 
 interface LobbyPageProps {
   params: Promise<{ code: string }>
@@ -53,7 +55,7 @@ export default function LobbyPage({ params }: LobbyPageProps) {
   const { code } = use(params)
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { playerId, playerName, setPlayer } = useGameStore()
+  const { playerId, playerName, playerColor, setPlayer } = useGameStore()
   const { room, players, loading, expired } = useRoom(code)
   const [starting, setStarting] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
@@ -66,6 +68,7 @@ export default function LobbyPage({ params }: LobbyPageProps) {
   const [settingsSaving, setSettingsSaving] = useState(false)
   const [closingGame, setClosingGame] = useState(false)
   const [settingsError, setSettingsError] = useState<string | null>(null)
+  const [actionBannerError, setActionBannerError] = useState<string | null>(null)
   const [readyError, setReadyError] = useState<string | null>(null)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [gameName, setGameName] = useState('')
@@ -86,9 +89,15 @@ export default function LobbyPage({ params }: LobbyPageProps) {
 
   useEffect(() => {
     if (room?.status === 'playing') {
-      router.push(`/game/${code}`)
+      const pathCode = normalizeRoomCodeParam(code)
+      const qs = playerSessionSuffix(searchParams, {
+        playerId,
+        playerName,
+        playerColor,
+      })
+      router.push(`/game/${pathCode}${qs}`)
     }
-  }, [room?.status, code, router])
+  }, [room?.status, code, router, playerId, playerName, playerColor, searchParams])
 
   const fallbackPlayerId = searchParams.get('pid')
   const fallbackPlayerName = searchParams.get('pname')
@@ -228,13 +237,18 @@ export default function LobbyPage({ params }: LobbyPageProps) {
       return
     }
     setReadyError(null)
-    const res = await fetch(`/api/rooms/${code}/ready`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ playerId: me.id }),
-    })
-    if (!res.ok) {
-      setReadyError('Ready status updaten mislukt. Probeer opnieuw.')
+    try {
+      const res = await fetch(`/api/rooms/${apiRoomCodeSegment(code)}/ready`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ playerId: me.id }),
+      })
+      if (!res.ok) {
+        setReadyError(await readApiErrorMessage(res))
+      }
+    } catch {
+      setReadyError('Kon geen verbinding maken. Probeer opnieuw.')
     }
   }
 
@@ -242,13 +256,21 @@ export default function LobbyPage({ params }: LobbyPageProps) {
     if (!room || starting) return
     setStarting(true)
     setStartError(null)
-    const res = await fetch(`/api/rooms/${code}/start`, { method: 'POST' })
-    if (!res.ok) {
-      const data = await res.json()
-      setStartError(data.error ?? 'Starten mislukt, probeer opnieuw')
-      if (res.status === 410) {
-        setTimeout(() => router.push('/dashboard'), 1200)
+    try {
+      const res = await fetch(`/api/rooms/${apiRoomCodeSegment(code)}/start`, {
+        method: 'POST',
+        credentials: 'include',
+      })
+      if (!res.ok) {
+        setStartError(await readApiErrorMessage(res))
+        if (res.status === 410) {
+          setTimeout(() => router.push('/dashboard'), 1200)
+        }
+        return
       }
+    } catch {
+      setStartError('Kon geen verbinding maken. Check internet en probeer opnieuw.')
+    } finally {
       setStarting(false)
     }
   }
@@ -261,16 +283,16 @@ export default function LobbyPage({ params }: LobbyPageProps) {
     }
     setSettingsSaving(true)
     setSettingsError(null)
-    const res = await fetch(`/api/rooms/${code}`, {
+    const res = await fetch(`/api/rooms/${apiRoomCodeSegment(code)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({
         game_name: gameName.trim(),
       }),
     })
-    const data = await res.json().catch(() => ({}))
     if (!res.ok) {
-      setSettingsError(data.error ?? 'Opslaan mislukt')
+      setSettingsError(await readApiErrorMessage(res))
       setSettingsSaving(false)
       return
     }
@@ -386,7 +408,7 @@ export default function LobbyPage({ params }: LobbyPageProps) {
                     </button>
                     {isHost && (
                       <button
-                        onClick={() => { setGearOpen(false); router.push(`/lobby/${code}/generate`) }}
+                        onClick={() => { setGearOpen(false); router.push(`/lobby/${code}/peek`) }}
                         className="w-full text-left px-4 py-3 text-sm text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)] transition-colors"
                       >
                         Vragen bekijken →
@@ -396,20 +418,28 @@ export default function LobbyPage({ params }: LobbyPageProps) {
                       <button
                         onClick={async () => {
                           if (closingGame) return
+                          if (!code?.trim()) {
+                            setActionBannerError('Roomcode ontbreekt. Open de lobby opnieuw via je dashboard.')
+                            setGearOpen(false)
+                            return
+                          }
                           setClosingGame(true)
                           setSettingsError(null)
+                          setActionBannerError(null)
                           setGearOpen(false)
                           try {
-                            const res = await fetch(`/api/rooms/${code}/close`, { method: 'POST' })
-                            const data = await res.json().catch(() => ({}))
+                            const res = await fetch(`/api/rooms/${apiRoomCodeSegment(code)}/close`, {
+                              method: 'POST',
+                              credentials: 'include',
+                            })
                             if (!res.ok) {
-                              setSettingsError(data.error ?? 'Spel afsluiten mislukt')
+                              setActionBannerError(await readApiErrorMessage(res))
                               setClosingGame(false)
                               return
                             }
                             router.push('/dashboard')
                           } catch {
-                            setSettingsError('Spel afsluiten mislukt')
+                            setActionBannerError('Kon geen verbinding maken. Check internet en probeer opnieuw.')
                             setClosingGame(false)
                           }
                         }}
@@ -424,6 +454,22 @@ export default function LobbyPage({ params }: LobbyPageProps) {
             </div>
           </div>
         </div>
+        {actionBannerError && (
+          <div
+            className="mb-4 rounded-2xl border border-[var(--coral)]/45 bg-[var(--coral)]/10 px-4 py-3 flex items-start justify-between gap-3"
+            role="alert"
+          >
+            <p className="text-sm text-[var(--coral)] leading-snug flex-1">{actionBannerError}</p>
+            <button
+              type="button"
+              onClick={() => setActionBannerError(null)}
+              className="shrink-0 text-[var(--coral)] text-lg leading-none px-1 hover:opacity-80"
+              aria-label="Melding sluiten"
+            >
+              ×
+            </button>
+          </div>
+        )}
         {lobbyFeedback && (
           <div className={`mb-3 text-center text-xs font-mono tracking-widest ${
             lobbyFeedback.tone === 'mint' ? 'text-[var(--mint)]' : 'text-[var(--gold)]'
@@ -731,7 +777,7 @@ export default function LobbyPage({ params }: LobbyPageProps) {
                 <button
                   onClick={() => {
                     setSettingsOpen(false)
-                    router.push(`/lobby/${code}/generate`)
+                    router.push(`/lobby/${code}/peek`)
                   }}
                   className="w-full py-3 rounded-2xl border border-[var(--border)] text-[var(--text-muted)] text-sm font-semibold hover:text-[var(--text-primary)] hover:border-[var(--mint)] transition-all"
                 >

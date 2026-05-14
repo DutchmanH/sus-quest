@@ -74,9 +74,27 @@ export function useRoom(code: string) {
           (payload) => {
             if (payload.eventType === 'UPDATE') {
               const nextRoom = payload.new as Room
+              const previousRoundNumber = currentRoundNumberRef.current
               currentRoundNumberRef.current = nextRoom.current_round
               setRoom(nextRoom)
               setExpired(isRoomExpired(nextRoom))
+
+              const playingLike = nextRoom.status === 'playing' || nextRoom.status === 'finished'
+              const roundPointerMoved =
+                previousRoundNumber !== undefined &&
+                previousRoundNumber !== nextRoom.current_round
+
+              if (playingLike && roundPointerMoved) {
+                void supabase
+                  .from('rounds')
+                  .select('*')
+                  .eq('room_id', roomId)
+                  .eq('round_number', nextRoom.current_round)
+                  .maybeSingle()
+                  .then(({ data }) => {
+                    if (!cancelled && data) setCurrentRound(data as Round)
+                  })
+              }
             }
           }
         )

@@ -9,40 +9,18 @@ import { generateFunnyGameName } from '@/lib/funny-game-name'
 import { getSeasonalHint, type SeasonalHint } from '@/lib/seasonal-events'
 import { useGameStore } from '@/store/gameStore'
 import type { Setting, Groep, Boldness, SeasonalTheme } from '@/types'
-
-const SETTINGS: { value: Setting; emoji: string; label: string; sub: string }[] = [
-  { value: 'bank',           emoji: '🛋️', label: 'Op de bank',    sub: 'thuis, ontspannen, lekker lui' },
-  { value: 'feest',          emoji: '🎉', label: 'Op een feest',   sub: 'muziek aan, iemand al weg' },
-  { value: 'after_midnight', emoji: '🌙', label: 'After midnight', sub: 'remmen los, alles mag' },
-  { value: 'onderweg',       emoji: '✈️', label: 'Onderweg',       sub: 'bus, trein of vliegtuig' },
-]
-
-const GROEPEN: { value: Groep; emoji: string; label: string; sub: string }[] = [
-  { value: 'vrienden',   emoji: '🐺', label: 'Oude vrienden',    sub: 'jullie kennen elkaars geheimen' },
-  { value: 'vreemden',   emoji: '🤝', label: 'Nieuwe mensen',    sub: 'icebreaker energy' },
-  { value: 'stelletjes', emoji: '💕', label: 'Stelletjes erbij', sub: 'relationship tension welcome' },
-  { value: 'familie',    emoji: '😬', label: 'Familie',          sub: 'het is een familieavond…' },
-]
-
-const BOLDNESS_OPTIONS: { value: Boldness; emoji: string; label: string; sub: string; color: string }[] = [
-  { value: 'gezellig',       emoji: '😊', label: 'Gewoon gezellig',      sub: 'fun voor iedereen, geen slachtoffers',         color: 'var(--mint)' },
-  { value: 'blozen',         emoji: '🌶️', label: 'Iemand gaat blozen',   sub: 'licht provocerend, voor volwassenen',           color: 'var(--gold)' },
-  { value: 'niemand_veilig', emoji: '🔥', label: 'Niemand is veilig',    sub: 'volledig ongecensureerd — jullie zijn gewaarschuwd', color: 'var(--coral)' },
-]
-
-const SEASONAL_THEME_OPTIONS: { value: SeasonalTheme; emoji: string; label: string; sub: string }[] = [
-  { value: 'koningsdag', emoji: '🧡', label: 'Koningsdag', sub: 'oranje chaos en feestvibes' },
-  { value: 'sinterklaas', emoji: '🎁', label: 'Sinterklaas', sub: 'surprises en ondeugende hints' },
-  { value: 'kerst', emoji: '🎄', label: 'Kerst', sub: 'gezellig, scherp en familieproof-ish' },
-  { value: 'oud_en_nieuw', emoji: '🎆', label: 'Oud & Nieuw', sub: 'resoluties, vuurwerk en chaos' },
-  { value: 'carnaval', emoji: '🎭', label: 'Carnaval', sub: 'verkleed, uitbundig, beetje fout' },
-]
+import {
+  PARTY_VIBE_OPTIONS,
+  PARTY_GROEP_OPTIONS,
+  PARTY_BOLDNESS_OPTIONS,
+  PARTY_SEASONAL_THEME_OPTIONS,
+} from '@/lib/party-wizard-config'
 
 // TEMP demo override: keep null for normal calendar auto-detection.
 const FORCE_SEASONAL_HINT_FOR_DEMO: SeasonalTheme | null = null
 
 function getForcedSeasonalHint(theme: SeasonalTheme): SeasonalHint {
-  const option = SEASONAL_THEME_OPTIONS.find(item => item.value === theme)
+  const option = PARTY_SEASONAL_THEME_OPTIONS.find(item => item.value === theme)
   return {
     key: theme,
     emoji: option?.emoji ?? '🎉',
@@ -110,7 +88,7 @@ export function CreatePartyPage() {
       }
       const { room, player } = await res.json()
       setPlayer(player.id, player.display_name, player.avatar_color)
-      router.push(`/lobby/${room.code}/generate`)
+      router.push(`/lobby/${room.code}/peek`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Verbindingsfout')
     } finally {
@@ -203,7 +181,7 @@ export function CreatePartyPage() {
               </h1>
             </div>
             <div className="flex flex-col gap-3 flex-1">
-              {SETTINGS.map(s => (
+              {PARTY_VIBE_OPTIONS.map(s => (
                 <button
                   key={s.value}
                   onClick={() => setSetting(s.value)}
@@ -239,7 +217,7 @@ export function CreatePartyPage() {
               </h1>
             </div>
             <div className="flex flex-col gap-3 flex-1">
-              {GROEPEN.map(g => (
+              {PARTY_GROEP_OPTIONS.map(g => (
                 <button
                   key={g.value}
                   onClick={() => setGroep(g.value)}
@@ -275,7 +253,7 @@ export function CreatePartyPage() {
               </h1>
             </div>
             <div className="flex flex-col gap-3 flex-1">
-              {BOLDNESS_OPTIONS.map(b => (
+              {PARTY_BOLDNESS_OPTIONS.map(b => (
                 <button
                   key={b.value}
                   onClick={() => setBoldness(b.value)}
@@ -371,7 +349,7 @@ export function CreatePartyPage() {
                   Met thema
                 </p>
                 <div className="flex flex-col gap-3">
-                  {SEASONAL_THEME_OPTIONS.map(theme => (
+                  {PARTY_SEASONAL_THEME_OPTIONS.filter(t => t.value !== 'custom').map(theme => (
                     <button
                       key={theme.value}
                       onClick={() => setSeasonalTheme(theme.value)}

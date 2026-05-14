@@ -5,7 +5,11 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ code: string }> }
 ) {
-  const { code } = await params
+  const raw = (await params).code
+  const code = typeof raw === 'string' ? raw.trim() : ''
+  if (!code) {
+    return NextResponse.json({ error: 'Roomcode ontbreekt' }, { status: 400 })
+  }
 
   const authClient = await createClient()
   const { data: { user } } = await authClient.auth.getUser()
