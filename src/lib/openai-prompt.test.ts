@@ -5,7 +5,8 @@ import { buildRoundsPrompt } from '@/lib/openai'
 describe('buildRoundsPrompt', () => {
   it('includes seasonal instructions when context exists', () => {
     const prompt = buildRoundsPrompt({
-      roundCount: 10,
+      numRounds: 3,
+      questionsPerRound: 3,
       settingCtx: 'feest context',
       groepCtx: 'vrienden context',
       boldnessCtx: 'blozen context',
@@ -26,7 +27,8 @@ describe('buildRoundsPrompt', () => {
 
   it('omits seasonal block when context is missing', () => {
     const prompt = buildRoundsPrompt({
-      roundCount: 10,
+      numRounds: 3,
+      questionsPerRound: 3,
       settingCtx: 'feest context',
       groepCtx: 'vrienden context',
       boldnessCtx: 'blozen context',
