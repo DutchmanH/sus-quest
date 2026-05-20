@@ -1,0 +1,18 @@
+#!/bin/sh
+# Runs before every git push. Mirrors the CI checks so failures are caught locally.
+
+echo "pre-push: running typecheck..."
+npx tsc --noEmit
+if [ $? -ne 0 ]; then
+  echo "pre-push: TypeScript errors found. Push aborted."
+  exit 1
+fi
+
+echo "pre-push: running lint..."
+npm run lint
+if [ $? -ne 0 ]; then
+  echo "pre-push: Lint errors found. Push aborted."
+  exit 1
+fi
+
+echo "pre-push: all checks passed."
