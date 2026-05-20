@@ -1,7 +1,10 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { logDevIncomingRequest, logDevProxyRedirect } from '@/lib/dev-server-log'
 
 export async function proxy(request: NextRequest) {
+  logDevIncomingRequest(request)
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -29,30 +32,34 @@ export async function proxy(request: NextRequest) {
   const isProtectedAppRoute = pathname === '/dashboard' || pathname === '/account' || pathname === '/create-party'
 
   if (pathname.startsWith('/admin')) {
-    // Keep this lightweight in proxy: only require an authenticated session.
-    // Admin authorization happens server-side in admin layout/API routes.
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) {
-      return NextResponse.redirect(new URL('/login', request.url))
+    // Validate JWT with Supabase Auth (not just cookies). Admin role is checked in layout/API.
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      const target = '/login'
+      logDevProxyRedirect(request, target)
+      return NextResponse.redirect(new URL(target, request.url))
     }
   } else if (isProtectedAppRoute) {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      logDevProxyRedirect(request, '/')
       return NextResponse.redirect(new URL('/', request.url))
     }
     const { data: profile } = await supabase
       .from('profiles')
       .select('blocked')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single()
     if (profile?.blocked) {
       await supabase.auth.signOut()
-      return NextResponse.redirect(new URL('/login?blocked=1', request.url))
+      const target = '/login?blocked=1'
+      logDevProxyRedirect(request, target)
+      return NextResponse.redirect(new URL(target, request.url))
     }
   } else if (pathname === '/login' || pathname === '/register') {
-    // Auth-page redirects: read session from cookie (no network call)
-    const { data: { session } } = await supabase.auth.getSession()
-    if (session) {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      logDevProxyRedirect(request, '/dashboard')
       return NextResponse.redirect(new URL('/dashboard', request.url))
     }
   }

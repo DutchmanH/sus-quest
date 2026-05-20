@@ -1,6 +1,6 @@
 'use client'
 
-import { use, useEffect, useMemo, useState } from 'react'
+import { use, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { MobileContainer } from '@/components/layout/MobileContainer'
 import { Button } from '@/components/ui/Button'
@@ -11,6 +11,7 @@ import { useSyncPlayerFromUrl } from '@/hooks/useSyncPlayerFromUrl'
 import { useGameStore } from '@/store/gameStore'
 import { createClient } from '@/lib/supabase/client'
 import type { Accusation } from '@/types'
+import { DEFAULT_ICON } from '@/lib/avatars'
 import { apiRoomCodeSegment, readApiErrorMessage } from '@/lib/read-api-error'
 import { normalizeRoomCodeParam, playerSessionSuffix } from '@/lib/game-player-query'
 
@@ -42,30 +43,81 @@ export default function RevealPage({ params }: RevealPageProps) {
   const [movingNextRound, setMovingNextRound] = useState(false)
   const [nextRoundError, setNextRoundError] = useState<string | null>(null)
   const [isAuthHost, setIsAuthHost] = useState(false)
+  const revealRedirectSkipRef = useRef(false)
+  const currentRoundRef = useRef(currentRound)
+  useLayoutEffect(() => {
+    currentRoundRef.current = currentRound ?? null
+  }, [currentRound])
 
   useEffect(() => {
     if (room?.status === 'lobby') {
       router.push(`/lobby/${roomCode}${sessionSuffix}`)
-      return
     }
-    if (currentRound?.status === 'accuse') {
-      router.push(`/game/${roomCode}/accuse${sessionSuffix}`)
-      return
+  }, [room?.status, roomCode, router, sessionSuffix])
+
+  // Debounce: avoid bouncing back to /accuse while `currentRound` is briefly stale after navigating here.
+  useEffect(() => {
+    if (room?.status === 'lobby') return
+    if (!currentRound) return
+
+    if (currentRound.status === 'reveal') {
+      revealRedirectSkipRef.current = true
+      const t = window.setTimeout(() => {
+        revealRedirectSkipRef.current = false
+      }, 200)
+      return () => clearTimeout(t)
     }
-    if (currentRound?.status === 'active') {
-      router.push(`/game/${roomCode}${sessionSuffix}`)
-    }
-  }, [room?.status, currentRound?.status, roomCode, router, sessionSuffix])
+
+    if (revealRedirectSkipRef.current) return
+
+    const t = window.setTimeout(() => {
+      if (revealRedirectSkipRef.current) return
+      const latest = currentRoundRef.current
+      if (!latest) return
+      if (latest.status === 'accuse') {
+        router.push(`/game/${roomCode}/accuse${sessionSuffix}`)
+        return
+      }
+      if (latest.status === 'active') {
+        router.push(`/game/${roomCode}${sessionSuffix}`)
+      }
+    }, 120)
+
+    return () => clearTimeout(t)
+  }, [room?.status, currentRound?.id, currentRound?.status, roomCode, router, sessionSuffix])
 
   useEffect(() => {
     if (!currentRound) return
+    const roundId = currentRound.id
     const supabase = createClient()
-    supabase
-      .from('accusations')
-      .select('*')
-      .eq('round_id', currentRound.id)
-      .then(({ data }) => setAccusations((data ?? []) as Accusation[]))
-  }, [currentRound])
+    let cancelled = false
+
+    async function load() {
+      const { data } = await supabase
+        .from('accusations')
+        .select('*')
+        .eq('round_id', roundId)
+      if (!cancelled) setAccusations((data ?? []) as Accusation[])
+    }
+
+    void load()
+
+    const channel = supabase
+      .channel(`reveal-accusations-${roundId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'accusations', filter: `round_id=eq.${roundId}` },
+        () => {
+          void load()
+        },
+      )
+      .subscribe()
+
+    return () => {
+      cancelled = true
+      supabase.removeChannel(channel)
+    }
+  }, [currentRound?.id])
 
   useEffect(() => {
     if (!currentRound) return
@@ -158,6 +210,27 @@ export default function RevealPage({ params }: RevealPageProps) {
     }
   }
 
+  const voteLeaderboard = useMemo(() => {
+    const accByAccuser = new Map(accusations.map(a => [a.accuser_player_id, a]))
+    return [...players]
+      .sort(
+        (a, b) =>
+          (b.score ?? 0) - (a.score ?? 0) ||
+          a.display_name.localeCompare(b.display_name, undefined, { sensitivity: 'base' }),
+      )
+      .map((player, index) => {
+        const acc = accByAccuser.get(player.id) ?? null
+        const accused = acc ? players.find(p => p.id === acc.accused_player_id) ?? null : null
+        return { rank: index + 1, player, acc, accused }
+      })
+  }, [players, accusations])
+
+  const boardTitle = language === 'en' ? 'VOTE SCOREBOARD' : 'STEMSCOREBORD'
+  const boardSub = language === 'en' ? 'Sus pick · points this round' : 'Verdachte · punten deze ronde'
+  const colTotal = language === 'en' ? 'Total' : 'Totaal'
+  const colRound = language === 'en' ? 'This round' : 'Deze ronde'
+  const noVote = language === 'en' ? 'No vote' : 'Geen stem'
+
   if (loading || !currentRound || !room) {
     return (
       <MobileContainer>
@@ -171,6 +244,21 @@ export default function RevealPage({ params }: RevealPageProps) {
               <Skeleton key={i} className="h-12 w-full rounded-xl" />
             ))}
           </div>
+        </div>
+      </MobileContainer>
+    )
+  }
+
+  if (
+    room.status === 'playing' &&
+    (currentRound.status === 'accuse' || currentRound.status === 'active')
+  ) {
+    const syncLabel = language === 'en' ? 'Syncing round…' : 'Ronde synchroniseren…'
+    return (
+      <MobileContainer>
+        <div className="flex flex-col min-h-screen px-5 items-center justify-center gap-4">
+          <div className="w-10 h-10 border-2 border-[var(--mint)] border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm font-mono tracking-widest text-[var(--text-muted)] text-center">{syncLabel}</p>
         </div>
       </MobileContainer>
     )
@@ -250,56 +338,77 @@ export default function RevealPage({ params }: RevealPageProps) {
           )}
         </div>
 
-        {/* Accusations */}
-        {accusations.length > 0 && (
-          <div className="bg-[var(--bg-card)] rounded-3xl p-5 mb-4">
-            <p className="text-xs font-mono tracking-widest text-[var(--text-muted)] mb-3">⚑ BESCHULDIGINGEN</p>
-            <div className="flex flex-col gap-2">
-              {accusations.map(acc => {
-                const accuser = players.find(p => p.id === acc.accuser_player_id)
-                const accused = players.find(p => p.id === acc.accused_player_id)
-                return (
-                  <div key={acc.id} className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      {accuser && (
-                        <Avatar
-                          name={accuser.display_name}
-                          color={accuser.avatar_color}
-                          icon={accuser.avatar_icon ?? undefined}
-                          size="sm"
-                        />
-                      )}
-                      <span className="text-sm font-semibold text-[var(--text-primary)] truncate">
-                        {accuser?.display_name ?? 'Onbekend'}
-                      </span>
-                      <span className="text-xs font-mono tracking-widest text-[var(--gold)]">VERDENKT</span>
-                      {accused && (
-                        <Avatar
-                          name={accused.display_name}
-                          color={accused.avatar_color}
-                          icon={accused.avatar_icon ?? undefined}
-                          size="sm"
-                        />
-                      )}
-                      <span className="text-sm font-semibold text-[var(--text-primary)] truncate">
-                        {accused?.display_name ?? 'Onbekend'}
-                      </span>
+        {/* Vote leaderboard: player → suspected avatar(s) + round score */}
+        <div className="bg-[var(--bg-card)] rounded-3xl p-5 mb-4">
+          <p className="text-xs font-mono tracking-widest text-[var(--text-muted)] mb-1">{boardTitle}</p>
+          <p className="text-[10px] font-mono text-[var(--text-muted)]/80 mb-4">{boardSub}</p>
+          <div className="flex flex-col gap-3">
+            {voteLeaderboard.map(({ rank, player, acc, accused }) => {
+              const roundPts = !acc ? '—' : acc.is_correct === true ? '+1' : '0'
+              const roundClass =
+                acc?.is_correct === true
+                  ? 'text-[var(--mint)] border-[var(--mint)]'
+                  : 'text-[var(--text-muted)] border-[var(--border)]'
+
+              return (
+                <div
+                  key={player.id}
+                  className="rounded-2xl border border-[var(--border)] bg-[var(--bg-primary)] px-4 py-3"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <span className="text-xs font-mono text-[var(--text-muted)] w-5 shrink-0">{rank}</span>
+                      <Avatar
+                        name={player.display_name}
+                        color={player.avatar_color}
+                        icon={player.avatar_icon ?? DEFAULT_ICON}
+                        size="md"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-bold text-[var(--text-primary)] truncate">{player.display_name}</p>
+                        <p className="text-[10px] font-mono tracking-widest text-[var(--text-muted)]">{colTotal}</p>
+                      </div>
                     </div>
-                    <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded-full border ${
-                      acc.is_correct === null
-                        ? 'border-[var(--border)] text-[var(--text-muted)]'
-                        : acc.is_correct
-                          ? 'border-[var(--mint)] text-[var(--mint)]'
-                          : 'border-[var(--coral)] text-[var(--coral)]'
-                    }`}>
-                      {acc.is_correct === null ? 'GEEN SUS · 0' : acc.is_correct ? 'BOOM · +1' : 'NEIN · +0'}
+                    <div className="text-right shrink-0">
+                      <p className="text-xl font-bold tabular-nums text-[var(--mint)]">
+                        {player.score ?? 0}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between gap-3 border-t border-[var(--border)]/60 pt-3 pl-8">
+                    <div className="flex flex-col gap-1 min-w-0">
+                      <p className="text-[10px] font-mono tracking-widest text-[var(--text-muted)] uppercase">
+                        {colRound}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        {accused ? (
+                          <div className="flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--bg-card)] pl-1 pr-2 py-1">
+                            <Avatar
+                              name={accused.display_name}
+                              color={accused.avatar_color}
+                              icon={accused.avatar_icon ?? DEFAULT_ICON}
+                              size="sm"
+                            />
+                            <span className="text-xs font-medium text-[var(--text-primary)] truncate max-w-[120px]">
+                              {accused.display_name}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-[var(--text-muted)] font-mono">{noVote}</span>
+                        )}
+                      </div>
+                    </div>
+                    <span
+                      className={`text-sm font-mono font-bold px-2.5 py-1 rounded-full border shrink-0 ${roundClass}`}
+                    >
+                      {roundPts}
                     </span>
                   </div>
-                )
-              })}
-            </div>
+                </div>
+              )
+            })}
           </div>
-        )}
+        </div>
 
         <div className="flex-1" />
 

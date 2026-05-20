@@ -119,9 +119,15 @@ export function useRoom(code: string) {
             if (changedRound.room_id !== roomId) return
             setCurrentRound((prev) => {
               const currentRoundNumber = currentRoundNumberRef.current
+              // Room pointer is source of truth: any DB change for that logical round applies,
+              // even if `prev` still pointed at another row (ordering gap between rooms vs rounds events).
+              if (
+                currentRoundNumber !== undefined &&
+                changedRound.round_number === currentRoundNumber
+              ) {
+                return changedRound
+              }
               if (prev?.id === changedRound.id) return changedRound
-              if (changedRound.status === 'active') return changedRound
-              if (currentRoundNumber && changedRound.round_number === currentRoundNumber) return changedRound
               return prev
             })
           }

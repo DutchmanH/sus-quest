@@ -5,9 +5,9 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 export async function GET() {
   try {
     const authClient = await createClient()
-    const { data: { session } } = await authClient.auth.getSession()
-    if (!session?.user) return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 })
-    const userId = session.user.id
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 })
+    const userId = user.id
 
     const supabase = await createServiceClient()
 

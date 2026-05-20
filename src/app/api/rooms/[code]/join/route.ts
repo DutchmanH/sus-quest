@@ -3,6 +3,54 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { isRoomExpired } from '@/lib/game-expiry'
 import { AVATAR_COLORS } from '@/types'
 
+/** Public check before guest builds avatar — room must exist and still be in lobby. */
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ code: string }> }
+) {
+  try {
+    const { code } = await params
+    const normalized = code.trim().toUpperCase()
+    if (!normalized) {
+      return NextResponse.json({ error: 'Roomcode is verplicht' }, { status: 400 })
+    }
+
+    const supabase = await createServiceClient()
+    const { data: room, error: roomError } = await supabase
+      .from('rooms')
+      .select('id, code, game_name, status, last_activity_at, created_at')
+      .eq('code', normalized)
+      .single()
+
+    if (roomError || !room) {
+      return NextResponse.json({ error: 'Room niet gevonden' }, { status: 404 })
+    }
+
+    if (isRoomExpired(room)) {
+      await supabase.from('rooms').update({ status: 'finished' }).eq('id', room.id)
+      return NextResponse.json(
+        { error: 'Deze game is verlopen. Laat de host een nieuwe game starten.', code: 'GAME_EXPIRED' },
+        { status: 410 },
+      )
+    }
+
+    if (room.status !== 'lobby') {
+      return NextResponse.json({ error: 'Game is al gestart' }, { status: 409 })
+    }
+
+    return NextResponse.json({
+      room: {
+        code: room.code,
+        game_name: room.game_name ?? null,
+        status: room.status,
+      },
+    })
+  } catch (err) {
+    console.error('Validate room error:', err)
+    return NextResponse.json({ error: 'Room controleren mislukt' }, { status: 500 })
+  }
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ code: string }> }

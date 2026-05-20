@@ -149,6 +149,34 @@ export default function AccusePage({ params }: AccusePageProps) {
     }
   }, [currentRound?.id])
 
+  // Guests rely on realtime; this channel matches the gate row even if `useRoom` lags one frame.
+  useEffect(() => {
+    if (!currentRound?.id) return
+    const supabase = createClient()
+    const channel = supabase
+      .channel(`accuse-round-status-${currentRound.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'rounds',
+          filter: `id=eq.${currentRound.id}`,
+        },
+        (payload) => {
+          const row = payload.new as { status?: string }
+          if (row?.status === 'reveal') {
+            router.push(`/game/${roomCode}/reveal${sessionSuffix}`)
+          }
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [currentRound?.id, roomCode, router, sessionSuffix])
+
   async function handleAccuse() {
     if (!selected || !currentRound || !effectivePlayerId) return
     setActionError(null)
@@ -207,13 +235,16 @@ export default function AccusePage({ params }: AccusePageProps) {
       })
       if (!res.ok) {
         setActionError(await readApiErrorMessage(res))
+        return
       }
+      // Immediate navigation so the host is never stuck waiting on realtime ordering.
+      router.push(`/game/${roomCode}/reveal${sessionSuffix}`)
     } catch {
       setActionError('Kon geen verbinding maken. Probeer opnieuw.')
     } finally {
       setResolvingRound(false)
     }
-  }, [code, currentRound, isHost, resolvingRound])
+  }, [code, currentRound, isHost, resolvingRound, roomCode, router, sessionSuffix])
 
   useEffect(() => {
     // Timer reset when round changes — intentional sync with external round state
